@@ -3,7 +3,4 @@
   <component name="RsExternalLinterProjectSettings">
     <option name="tool" value="Clippy" />
   </component>
-  <component name="VcsManagerConfiguration">
-    <option name="CLEAR_INITIAL_COMMIT_MESSAGE" value="true" />
-  </component>
 </project>
