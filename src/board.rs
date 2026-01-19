@@ -16,12 +16,12 @@ pub type Point = (usize, usize);
 
 impl Board {
 
-    pub(crate) const fn zero(board_size: BoardSize) -> Self {
-        Self {
-            grid: vec![],
-            size: board_size
-        }
-    }
+    // pub(crate) const fn zero(board_size: BoardSize) -> Self {
+    //     Self {
+    //         grid: vec![],
+    //         size: board_size
+    //     }
+    // }
 
     pub fn new(board_size: BoardSize, cell: Cell) -> Self {
         Self {
