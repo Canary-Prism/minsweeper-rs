@@ -102,7 +102,7 @@ pub trait Logic: Debug + Display {
 
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum GameResult {
     Won, Lost, Resigned
 }
