@@ -50,8 +50,6 @@ impl Solver for MiaSolver {
             }
 
             if number as usize == marked_mines.len() && empty_spaces.len() > marked_mines.len() {
-                #[cfg(test)]
-                // println!("1");
                 return Some(Move::single(Action::new(point, Chord), Some(Reason::new(MiaLogic::Chord, marked_mines))))
             } else if number as usize == empty_spaces.len() {
                 let clicks: HashSet<_> = size.neighbours(point)
@@ -60,8 +58,6 @@ impl Solver for MiaSolver {
                         .collect();
 
                 if !clicks.is_empty() {
-                    #[cfg(test)]
-                    // println!("2");
                     return Some(Move::multi(clicks, Some(Reason::new(MiaLogic::FlagChord, empty_spaces))));
                 }
             } else if (number as usize) < marked_mines.len() {
@@ -70,8 +66,6 @@ impl Solver for MiaSolver {
                         .map(|e| Action::new(e, Flag))
                         .collect();
 
-                #[cfg(test)]
-                // println!("3");
                 return Some(Move::multi(clicks, Some(Reason::new(MiaLogic::FlagChord, empty_spaces))));
             }
         }
@@ -99,20 +93,14 @@ impl Solver for MiaSolver {
         impl PartialOrd for Flag {
             fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
                 if self == other {
-                    #[cfg(test)]
-                    // println!("4");
                     return Some(Ordering::Equal)
                 }
 
                 if self.contains(other) {
-                    #[cfg(test)]
-                    // println!("5");
                     return Some(Ordering::Greater)
                 }
 
                 if other.contains(self) {
-                    #[cfg(test)]
-                    // println!("6");
                     return Some(Ordering::Less)
                 }
 
