@@ -1,5 +1,5 @@
-use std::fmt::{Debug, Display, Formatter};
 use crate::board::{Board, Point};
+use std::fmt::{Debug, Display, Formatter};
 
 pub mod board;
 pub mod minsweeper;
@@ -146,14 +146,14 @@ pub enum GameStatus {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use super::*;
     use crate::board::ConventionalSize;
     use crate::minsweeper::MinsweeperGame;
-    use crate::solver::GameResult::Lost;
     use crate::solver::mia::MiaSolver;
+    use crate::solver::start::SafeStart;
+    use crate::solver::GameResult::Lost;
     use crate::solver::Solver;
-    use crate::solver::start::{SafeStart, ZeroStart};
-    use super::*;
+    use std::sync::Arc;
 
     #[test]
     fn it_works() {
