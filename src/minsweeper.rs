@@ -313,15 +313,12 @@ impl InternalMinsweeper for MinsweeperGame {
             if let Some(solver) = &self.solver {
                 loop {
                     let state = generate_game(self.board_size);
-                    println!("game generated\n{}", state.board);
 
                     let mut game = SetMinsweeperGame::new(state.clone());
                     Minsweeper::reveal(&mut game, point)
                             .expect("should always be able to successfully reveal");
 
                     let result = solver.solve_game(&mut game);
-
-                    println!("result: {:?}", result);
 
                     if result == GameResult::Won {
                         *self.gamestate_mut() = state;
