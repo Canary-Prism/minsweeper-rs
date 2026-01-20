@@ -146,6 +146,13 @@ pub enum GameStatus {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+    use crate::board::ConventionalSize;
+    use crate::minsweeper::MinsweeperGame;
+    use crate::solver::GameResult::Lost;
+    use crate::solver::mia::MiaSolver;
+    use crate::solver::Solver;
+    use crate::solver::start::{SafeStart, ZeroStart};
     use super::*;
 
     #[test]
@@ -154,5 +161,41 @@ mod tests {
             size_of::<GameState>()
         };
         println!("{mewo}")
+    }
+
+    #[test]
+    fn mia_solver_works_at_least() {
+        println!("{:?}", ConventionalSize::Expert.size());
+        let mut game = MinsweeperGame::new(ConventionalSize::Expert.size(), Arc::new(|| {}), Arc::new(|| {}));
+        println!("starting");
+        game.start_with_solver(Box::new(MiaSolver));
+
+        println!("revealing");
+        game.reveal((0, 0))
+                .expect("shouldn't fail i don't think???");
+    }
+
+    #[test]
+    fn mia_solver_should_never_die() {
+        let mut game = MinsweeperGame::new(ConventionalSize::Expert.size(), Arc::new(|| {}), Arc::new(|| {}));
+
+        for _ in 0..100 {
+            game.start_with_solver(Box::new(SafeStart));
+
+            game.reveal((0, 0))
+                    .expect("first click shouldn't fail");
+
+            let result = MiaSolver.solve_game(&mut game);
+            dbg!("mewo");
+
+            if result == Lost {
+                panic!("mia solver shouldn't lose\n{}", game.gamestate().board)
+            }
+        }
+    }
+
+    #[test]
+    fn mewo() {
+        println!("{:#x}", 16742399)
     }
 }
