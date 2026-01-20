@@ -1,10 +1,10 @@
+use crate::{Cell, CellState, CellType};
 use std::error::Error;
-use std::fmt::{format, Display, Formatter};
+use std::fmt::{Display, Formatter};
 use std::iter::Flatten;
-use std::num::{NonZeroU32, NonZeroUsize};
+use std::num::NonZeroUsize;
 use std::ops::{Index, IndexMut};
 use std::vec::IntoIter;
-use crate::{Cell, CellState, CellType};
 
 #[derive(Clone, Debug)]
 pub struct Board {
@@ -39,8 +39,7 @@ impl Board {
     }
 
     pub(crate) fn has_won(&self) -> bool {
-        !self.grid.iter()
-                .flat_map(|e| e.iter())
+        !self.iter()
                 .any(|cell| match cell {
                     Cell { cell_type: CellType::Mine, cell_state: CellState::Revealed } => true,
                     Cell { cell_type: CellType::Safe(_), cell_state: state } if *state != CellState::Revealed => true,
@@ -120,6 +119,19 @@ impl<'a> IntoIterator for &'a mut Board {
     }
 }
 
+impl Display for Board {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        for y in 0..self.size.height.into() {
+            for x in 0..self.size.width.into() {
+                write!(f, "{}", self[(x, y)])?;
+            }
+            writeln!(f)?;
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 pub enum BoardSizeError {
     InvalidSize {
@@ -160,7 +172,7 @@ impl BoardSize {
 
         let w = NonZeroUsize::new(width)
                 .ok_or(BoardSizeError::InvalidSize { width, height })?;
-        let h = NonZeroUsize::new(width)
+        let h = NonZeroUsize::new(height)
                 .ok_or(BoardSizeError::InvalidSize { width, height })?;
         let m = NonZeroUsize::new(mines)
                 .ok_or(BoardSizeError::TooFewMines)?;
@@ -194,8 +206,8 @@ impl BoardSize {
     pub fn neighbours(&self, point: Point) -> impl Iterator<Item = Point> {
         let mut neighbours = vec![];
 
-        for y in usize::max(0, point.1 - 1)..=usize::min(usize::from(self.height()) - 1, point.1 + 1) {
-            for x in usize::max(0, point.0 - 1)..=usize::min(usize::from(self.width()) - 1, point.0 + 1) {
+        for y in point.1.saturating_sub(1)..=usize::min(usize::from(self.height()) - 1, point.1.saturating_add(1)) {
+            for x in point.0.saturating_sub(1)..=usize::min(usize::from(self.width()) - 1, point.0.saturating_add(1)) {
                 if (x, y) != point {
                     neighbours.push((x, y))
                 }

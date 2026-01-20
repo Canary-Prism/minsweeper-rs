@@ -1,5 +1,5 @@
 use crate::board::{Board, BoardSize, Point};
-use crate::solver::Solver;
+use crate::solver::{GameResult, Solver};
 use crate::{check_interact, Cell, CellState, CellType, GameState, GameStatus, Minsweeper};
 use rand::Rng;
 use std::collections::HashSet;
@@ -32,7 +32,7 @@ trait InternalMinsweeper {
             return Ok(self.player_gamestate())
         }
 
-        if self.player_gamestate().board.has_won() {
+        if self.gamestate_mut().board.has_won() {
             self.gamestate_mut().status = GameStatus::Won;
 
             self.on_win();
@@ -58,6 +58,7 @@ trait InternalMinsweeper {
 
         while !flood.is_empty() {
             let point = *flood.iter().next().unwrap();
+            flood.remove(&point);
 
             for point in board.size().neighbours(point) {
                 if let Cell { cell_type: CellType::Safe(number), cell_state: state } = board[point]
@@ -77,7 +78,7 @@ trait InternalMinsweeper {
         let mut state = self.gamestate_mut();
         // let state = state.as_mut();
         let board = &mut state.board;
-        if board[point].cell_state == CellState::Unknown {
+        if board[point].cell_state != CellState::Unknown {
             return true
         }
 
@@ -127,7 +128,7 @@ trait InternalMinsweeper {
             return Ok(self.player_gamestate())
         }
 
-        if self.player_gamestate().board.has_won() {
+        if self.gamestate_mut().board.has_won() {
             self.gamestate_mut().status = GameStatus::Won;
 
             self.on_win();
@@ -216,24 +217,18 @@ fn generate_game(board_size: BoardSize) -> GameState {
 
 fn generate_nmbers(board: &mut Board) {
     let empty_unknown = Cell::new(CellType::EMPTY, CellState::Unknown);
-    for y in 0..usize::from(board.size().height()) {
-        for x in 0..usize::from(board.size().width()) {
-            let point = (x, y);
-            let cell = &mut board[point];
+    for point in board.size().points() {
+        let cell = &mut board[point];
 
-            if matches!(cell.cell_type, CellType::Safe(_)) {
-                *cell = empty_unknown;
-            }
+        if matches!(cell.cell_type, CellType::Safe(_)) {
+            *cell = empty_unknown;
         }
     }
-    for y in 0..usize::from(board.size().height()) {
-        for x in 0..usize::from(board.size().width()) {
-            let point = (x, y);
-            if board[point].cell_type == CellType::Mine {
-                for point in board.size().neighbours(point) {
-                    if let CellType::Safe(number) = board[point].cell_type {
-                        board[point] = Cell::new(CellType::Safe(number + 1), CellState::Unknown);
-                    }
+    for point in board.size().points() {
+        if board[point].cell_type == CellType::Mine {
+            for point in board.size().neighbours(point) {
+                if let CellType::Safe(number) = board[point].cell_type {
+                    board[point] = Cell::new(CellType::Safe(number + 1), CellState::Unknown);
                 }
             }
         }
@@ -265,7 +260,7 @@ impl MinsweeperGame {
     }
 
     fn internal_start(&mut self, solver: Option<Box<dyn Solver>>) -> &GameState {
-        self.game_state = GameState::new(GameStatus::Playing, Board::empty(self.board_size),
+        *self.gamestate_mut() = GameState::new(GameStatus::Playing, Board::empty(self.board_size),
                                          usize::from(self.board_size.mines()).try_into().unwrap());
 
         self.first = true;
@@ -318,12 +313,15 @@ impl InternalMinsweeper for MinsweeperGame {
             if let Some(solver) = &self.solver {
                 loop {
                     let state = generate_game(self.board_size);
+                    println!("game generated\n{}", state.board);
 
                     let mut game = SetMinsweeperGame::new(state.clone());
                     Minsweeper::reveal(&mut game, point)
                             .expect("should always be able to successfully reveal");
 
                     let result = solver.solve_game(&mut game);
+
+                    println!("result: {:?}", result);
 
                     if result == GameResult::Won {
                         *self.gamestate_mut() = state;
@@ -344,7 +342,7 @@ impl InternalMinsweeper for MinsweeperGame {
             return Ok(self.player_gamestate())
         }
 
-        if self.player_gamestate().board.has_won() {
+        if self.gamestate_mut().board.has_won() {
             self.gamestate_mut().status = GameStatus::Won;
 
             self.on_win();
@@ -381,6 +379,43 @@ impl InternalMinsweeper for MinsweeperGame {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct SetMinsweeperGame {
+    game_state: GameState,
+    player_game_state: GameState
+}
+
+impl SetMinsweeperGame {
+    pub fn new(game_state: GameState) -> Self {
+        Self { player_game_state: game_state.hide_mines(), game_state }
+    }
+}
+
+impl InternalMinsweeper for SetMinsweeperGame {
+    fn start(&mut self) -> &GameState {
+        unimplemented!()
+    }
+
+    fn on_win(&self) {
+
+    }
+
+    fn on_lose(&self) {
+
+    }
+
+    fn player_gamestate(&self) -> &GameState {
+        &self.player_game_state
+    }
+
+    fn gamestate_mut(&mut self) -> impl DerefMut<Target = GameState> {
+        GameStateHandle {
+            game_state: &mut self.game_state,
+            obfuscated_game_state: &mut self.player_game_state,
+        }
+    }
+}
+
 struct GameStateHandle<'a> {
     game_state: &'a mut GameState,
     obfuscated_game_state: &'a mut GameState
@@ -409,39 +444,6 @@ impl DerefMut for GameStateHandle<'_> {
 impl Drop for GameStateHandle<'_> {
     fn drop(&mut self) {
         *self.obfuscated_game_state = self.game_state.hide_mines()
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct SetMinsweeperGame {
-    game_state: GameState
-}
-
-impl SetMinsweeperGame {
-    pub fn new(game_state: GameState) -> Self {
-        Self { game_state }
-    }
-}
-
-impl InternalMinsweeper for SetMinsweeperGame {
-    fn start(&mut self) -> &GameState {
-        unimplemented!()
-    }
-
-    fn on_win(&self) {
-
-    }
-
-    fn on_lose(&self) {
-
-    }
-
-    fn player_gamestate(&self) -> &GameState {
-        &self.game_state
-    }
-
-    fn gamestate_mut(&mut self) -> impl DerefMut<Target = GameState> {
-        &mut self.game_state
     }
 }
 

@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::fmt::{Debug, Display, Formatter};
 use crate::board::{Board, Point};
 
 pub mod board;
@@ -109,6 +109,19 @@ impl Cell {
         Self {
             cell_type,
             cell_state
+        }
+    }
+}
+
+impl Display for Cell {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match (self.cell_type, self.cell_state) {
+            (CellType::Safe(0), _) => write!(f, " "),
+            (CellType::Safe(number), _) => write!(f, "{number}"),
+            (CellType::Mine, _) => write!(f, "*"),
+            (CellType::Unknown, CellState::Revealed) => write!(f, "?"),
+            (CellType::Unknown, CellState::Flagged) => write!(f, "!"),
+            (CellType::Unknown, CellState::Unknown) => write!(f, "▩")
         }
     }
 }

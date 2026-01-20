@@ -50,6 +50,8 @@ impl Solver for MiaSolver {
             }
 
             if number as usize == marked_mines.len() && empty_spaces.len() > marked_mines.len() {
+                #[cfg(test)]
+                // println!("1");
                 return Some(Move::single(Action::new(point, Chord), Some(Reason::new(MiaLogic::Chord, marked_mines))))
             } else if number as usize == empty_spaces.len() {
                 let clicks: HashSet<_> = size.neighbours(point)
@@ -58,6 +60,8 @@ impl Solver for MiaSolver {
                         .collect();
 
                 if !clicks.is_empty() {
+                    #[cfg(test)]
+                    // println!("2");
                     return Some(Move::multi(clicks, Some(Reason::new(MiaLogic::FlagChord, empty_spaces))));
                 }
             } else if (number as usize) < marked_mines.len() {
@@ -66,6 +70,8 @@ impl Solver for MiaSolver {
                         .map(|e| Action::new(e, Flag))
                         .collect();
 
+                #[cfg(test)]
+                // println!("3");
                 return Some(Move::multi(clicks, Some(Reason::new(MiaLogic::FlagChord, empty_spaces))));
             }
         }
@@ -75,12 +81,12 @@ impl Solver for MiaSolver {
 
         #[derive(Clone, Debug, Eq, PartialEq)]
         struct Flag {
-            number: u8,
+            number: i8,
             points: HashSet<Point>
         }
 
         impl Flag {
-            pub const fn new(number: u8, points: HashSet<Point>) -> Self {
+            pub const fn new(number: i8, points: HashSet<Point>) -> Self {
                 Self { number, points }
             }
 
@@ -93,14 +99,20 @@ impl Solver for MiaSolver {
         impl PartialOrd for Flag {
             fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
                 if self == other {
+                    #[cfg(test)]
+                    // println!("4");
                     return Some(Ordering::Equal)
                 }
 
                 if self.contains(other) {
+                    #[cfg(test)]
+                    // println!("5");
                     return Some(Ordering::Greater)
                 }
 
                 if other.contains(self) {
+                    #[cfg(test)]
+                    // println!("6");
                     return Some(Ordering::Less)
                 }
 
@@ -160,12 +172,11 @@ impl Solver for MiaSolver {
                 continue
             }
 
-            flags.insert(Flag::new(required, neighbours));
+            flags.insert(Flag::new(required as i8, neighbours));
         }
 
         let mut changed = true;
         while changed {
-            changed = false;
 
             let mut to_add = HashSet::new();
             for flag in &flags {
@@ -190,7 +201,7 @@ impl Solver for MiaSolver {
                                         .collect(),
                                 Some(Reason::new(MiaLogic::RegionDeductionReveal, contained.points.clone()))
                             ))
-                        } else if remaining.number as usize == remaining.points.len() {
+                        } else if remaining.number > 0 && remaining.number as usize == remaining.points.len() {
                             return Some(Move::multi(
                                 remaining.points
                                         .into_iter()
@@ -218,7 +229,7 @@ impl Solver for MiaSolver {
                             continue
                         }
 
-                        if remaining.number as usize == remaining.points.len() {
+                        if remaining.number > 0 && remaining.number as usize == remaining.points.len() {
                             return Some(Move::multi(
                                 remaining.points
                                         .into_iter()
@@ -322,14 +333,14 @@ fn brute_force(points: &Vec<Point>, index: usize, state: &GameState) -> Box<dyn 
         }
     }
 
-    let mines_to_flag = number - flags;
+    let mines_to_flag = number as isize - flags;
 
-    if mines_to_flag as isize > state.remaining_mines || mines_to_flag as usize > empties.len() {
+    if mines_to_flag > state.remaining_mines || mines_to_flag as usize > empties.len() {
         return Box::new(std::iter::empty())
     }
 
     if mines_to_flag == 0 || empties.is_empty() {
-        if (index + 1 == points.len()) {
+        if index + 1 == points.len() {
             return Box::new(std::iter::once(state.clone()));
         }
         return brute_force(points, index + 1, state);
@@ -359,7 +370,7 @@ fn brute_force(points: &Vec<Point>, index: usize, state: &GameState) -> Box<dyn 
             .flatten())
 }
 
-fn get_flag_combinations(empties: &Vec<Point>, mines_to_flag: u8) -> Vec<HashSet<Point>> {
+fn get_flag_combinations(empties: &Vec<Point>, mines_to_flag: isize) -> Vec<HashSet<Point>> {
     if empties.len() < mines_to_flag as usize {
         return Vec::new()
     }
@@ -368,7 +379,7 @@ fn get_flag_combinations(empties: &Vec<Point>, mines_to_flag: u8) -> Vec<HashSet
             .collect()
 }
 
-fn recursive_get_flag_combinations(selected: HashSet<Point>, empties: &Vec<Point>, start: usize, mines_to_flag: u8) -> Box<dyn Iterator<Item = HashSet<Point>>> {
+fn recursive_get_flag_combinations(selected: HashSet<Point>, empties: &Vec<Point>, start: usize, mines_to_flag: isize) -> Box<dyn Iterator<Item = HashSet<Point>>> {
     if mines_to_flag < 1 {
         return Box::new(std::iter::empty())
     }
