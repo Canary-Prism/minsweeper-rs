@@ -325,9 +325,11 @@ impl InternalMinsweeper for MinsweeperGame {
                         break;
                     }
                 }
+            } else {
+                *self.gamestate_mut() = generate_game(self.board_size);
             }
-            *self.gamestate_mut() = generate_game(self.board_size);
         }
+
 
         let success = self.internal_reveal(point);
 
