@@ -310,20 +310,7 @@ impl InternalMinsweeper for MinsweeperGame {
             self.first = false;
 
             if let Some(solver) = &self.solver {
-                loop {
-                    let state = generate_game(self.board_size);
-
-                    let mut game = SetMinsweeperGame::new(state.clone());
-                    Minsweeper::reveal(&mut game, point)
-                            .expect("should always be able to successfully reveal");
-
-                    let result = solver.solve_game(&mut game);
-
-                    if result == GameResult::Won {
-                        *self.gamestate_mut() = state;
-                        break;
-                    }
-                }
+                *self.gamestate_mut() = generate_solvable_game(self.board_size, solver.as_ref(), point);
             } else {
                 *self.gamestate_mut() = generate_game(self.board_size);
             }
@@ -374,6 +361,22 @@ impl InternalMinsweeper for MinsweeperGame {
 
         drop(mewo);
         Ok(self.player_gamestate())
+    }
+}
+
+pub fn generate_solvable_game(board_size: BoardSize, solver: &dyn Solver, point: Point) -> GameState {
+    loop {
+        let state = generate_game(board_size);
+
+        let mut game = SetMinsweeperGame::new(state.clone());
+        Minsweeper::reveal(&mut game, point)
+                .expect("should always be able to successfully reveal");
+
+        let result = solver.solve_game(&mut game);
+
+        if result == GameResult::Won {
+            return state;
+        }
     }
 }
 
