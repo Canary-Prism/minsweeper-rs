@@ -2,12 +2,12 @@ use crate::board::Point;
 use crate::solver::Operation::{Chord, Flag, Reveal};
 use crate::solver::{Action, Logic, Move, Reason, Solver};
 use crate::{CellState, CellType, GameState, GameStatus};
-use linked_hash_set::LinkedHashSet;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::Sub;
+use hashlink::LinkedHashSet;
 
 #[derive(Copy, Clone, Debug)]
 pub struct MiaSolver;

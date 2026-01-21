@@ -146,7 +146,7 @@ pub enum GameStatus {
 
 #[cfg(test)]
 mod tests {
-    use linked_hash_set::LinkedHashSet;
+
     use super::*;
     use crate::board::ConventionalSize;
     use crate::minsweeper::MinsweeperGame;
