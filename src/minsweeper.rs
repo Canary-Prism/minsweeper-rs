@@ -4,7 +4,6 @@ use crate::{check_interact, Cell, CellState, CellType, GameState, GameStatus, Mi
 use rand::Rng;
 use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
-use std::sync::Arc;
 
 trait InternalMinsweeper {
 
@@ -239,15 +238,15 @@ pub struct MinsweeperGame {
     board_size: BoardSize,
     game_state: GameState,
     player_game_state: GameState,
-    on_win: Arc<dyn Fn()>,
-    on_lose: Arc<dyn Fn()>,
+    on_win: Box<dyn Fn()>,
+    on_lose: Box<dyn Fn()>,
     first: bool,
     solver: Option<Box<dyn Solver>>
 }
 
 impl MinsweeperGame {
 
-    pub fn new(board_size: BoardSize, on_win: Arc<dyn Fn()>, on_lose: Arc<dyn Fn()>) -> Self {
+    pub fn new(board_size: BoardSize, on_win: Box<dyn Fn()>, on_lose: Box<dyn Fn()>) -> Self {
         Self {
             board_size,
             game_state: GameState::new(GameStatus::Never, Board::empty(board_size), 0),

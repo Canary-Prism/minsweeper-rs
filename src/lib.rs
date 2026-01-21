@@ -146,6 +146,7 @@ pub enum GameStatus {
 
 #[cfg(test)]
 mod tests {
+    use linked_hash_set::LinkedHashSet;
     use super::*;
     use crate::board::ConventionalSize;
     use crate::minsweeper::MinsweeperGame;
@@ -153,7 +154,6 @@ mod tests {
     use crate::solver::start::SafeStart;
     use crate::solver::GameResult::Lost;
     use crate::solver::Solver;
-    use std::sync::Arc;
 
     #[test]
     fn it_works() {
@@ -166,7 +166,7 @@ mod tests {
     #[test]
     fn mia_solver_works_at_least() {
         println!("{:?}", ConventionalSize::Expert.size());
-        let mut game = MinsweeperGame::new(ConventionalSize::Expert.size(), Arc::new(|| {}), Arc::new(|| {}));
+        let mut game = MinsweeperGame::new(ConventionalSize::Expert.size(), Box::new(|| {}), Box::new(|| {}));
         println!("starting");
         game.start_with_solver(Box::new(MiaSolver));
 
@@ -177,7 +177,7 @@ mod tests {
 
     #[test]
     fn mia_solver_should_never_die() {
-        let mut game = MinsweeperGame::new(ConventionalSize::Expert.size(), Arc::new(|| {}), Arc::new(|| {}));
+        let mut game = MinsweeperGame::new(ConventionalSize::Expert.size(), Box::new(|| {}), Box::new(|| {}));
 
         for _ in 0..100 {
             game.start_with_solver(Box::new(SafeStart));
