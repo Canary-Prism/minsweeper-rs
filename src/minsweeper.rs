@@ -193,7 +193,7 @@ impl<T: InternalMinsweeper + ?Sized> Minsweeper for T {
 }
 
 
-fn generate_game(board_size: BoardSize) -> GameState {
+pub fn generate_game(board_size: BoardSize) -> GameState {
     let mut board = Board::empty(board_size);
 
     let mine = Cell::new(CellType::Mine, CellState::Unknown);
