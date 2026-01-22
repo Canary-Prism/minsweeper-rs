@@ -7,7 +7,6 @@ use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::Sub;
-use hashlink::LinkedHashSet;
 
 #[derive(Copy, Clone, Debug)]
 pub struct MiaSolver;
@@ -135,7 +134,10 @@ impl Solver for MiaSolver {
             }
         }
 
-        let mut flags = LinkedHashSet::new();
+        #[cfg(feature = "linked-hash-set")]
+        let mut flags = hashlink::LinkedHashSet::new();
+        #[cfg(not(feature = "linked-hash-set"))]
+        let mut flags = HashSet::new();
 
         for point in size.points() {
             let CellType::Safe(mut required) = state.board[point].cell_type else {
