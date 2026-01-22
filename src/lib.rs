@@ -186,7 +186,6 @@ mod tests {
                     .expect("first click shouldn't fail");
 
             let result = MiaSolver.solve_game(&mut game);
-            dbg!("mewo");
 
             if result == Lost {
                 panic!("mia solver shouldn't lose\n{}", game.gamestate().board)
