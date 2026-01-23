@@ -3,6 +3,8 @@ pub mod start;
 
 use std::collections::HashSet;
 use std::fmt::{Debug, Display};
+use std::rc::Rc;
+use std::sync::Arc;
 use crate::{GameState, GameStatus, Minsweeper};
 use crate::board::Point;
 
@@ -27,6 +29,39 @@ pub trait Solver {
             GameStatus::Playing => GameResult::Resigned,
             _ => unreachable!()
         }
+    }
+}
+
+impl<S: Solver + ?Sized> Solver for Box<S> {
+    fn solve(&self, game_state: &GameState) -> Option<Move> {
+        (**self).solve(game_state)
+    }
+    fn solve_game(&self, minsweeper: &mut dyn Minsweeper) -> GameResult {
+        (**self).solve_game(minsweeper)
+    }
+}
+impl<S: Solver + ?Sized> Solver for Arc<S> {
+    fn solve(&self, game_state: &GameState) -> Option<Move> {
+        (**self).solve(game_state)
+    }
+    fn solve_game(&self, minsweeper: &mut dyn Minsweeper) -> GameResult {
+        (**self).solve_game(minsweeper)
+    }
+}
+impl<S: Solver + ?Sized> Solver for Rc<S> {
+    fn solve(&self, game_state: &GameState) -> Option<Move> {
+        (**self).solve(game_state)
+    }
+    fn solve_game(&self, minsweeper: &mut dyn Minsweeper) -> GameResult {
+        (**self).solve_game(minsweeper)
+    }
+}
+impl Solver for &dyn Solver {
+    fn solve(&self, game_state: &GameState) -> Option<Move> {
+        (**self).solve(game_state)
+    }
+    fn solve_game(&self, minsweeper: &mut dyn Minsweeper) -> GameResult {
+        (**self).solve_game(minsweeper)
     }
 }
 

@@ -168,7 +168,7 @@ mod tests {
         println!("{:?}", ConventionalSize::Expert.size());
         let mut game = MinsweeperGame::new(ConventionalSize::Expert.size(), Box::new(|| {}), Box::new(|| {}));
         println!("starting");
-        game.start_with_solver(Box::new(MiaSolver));
+        game.start_with_solver(MiaSolver);
 
         println!("revealing");
         game.reveal((0, 0))
@@ -180,7 +180,7 @@ mod tests {
         let mut game = MinsweeperGame::new(ConventionalSize::Expert.size(), Box::new(|| {}), Box::new(|| {}));
 
         for _ in 0..100 {
-            game.start_with_solver(Box::new(SafeStart));
+            game.start_with_solver(SafeStart);
 
             game.reveal((0, 0))
                     .expect("first click shouldn't fail");

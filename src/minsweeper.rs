@@ -234,17 +234,17 @@ fn generate_nmbers(board: &mut Board) {
     }
 }
 
-pub struct MinsweeperGame {
+pub struct MinsweeperGame<S: Solver> {
     board_size: BoardSize,
     game_state: GameState,
     player_game_state: GameState,
     on_win: Box<dyn Fn()>,
     on_lose: Box<dyn Fn()>,
     first: bool,
-    solver: Option<Box<dyn Solver>>
+    solver: Option<S>
 }
 
-impl MinsweeperGame {
+impl<S: Solver> MinsweeperGame<S> {
 
     pub fn new(board_size: BoardSize, on_win: Box<dyn Fn()>, on_lose: Box<dyn Fn()>) -> Self {
         Self {
@@ -258,7 +258,7 @@ impl MinsweeperGame {
         }
     }
 
-    fn internal_start(&mut self, solver: Option<Box<dyn Solver>>) -> &GameState {
+    fn internal_start(&mut self, solver: Option<S>) -> &GameState {
         *self.gamestate_mut() = GameState::new(GameStatus::Playing, Board::empty(self.board_size),
                                          usize::from(self.board_size.mines()).try_into().unwrap());
 
@@ -268,12 +268,12 @@ impl MinsweeperGame {
         self.player_gamestate()
     }
 
-    pub fn start_with_solver(&mut self, solver: Box<dyn Solver>) -> &GameState {
+    pub fn start_with_solver(&mut self, solver: S) -> &GameState {
         self.internal_start(solver.into())
     }
 }
 
-impl InternalMinsweeper for MinsweeperGame {
+impl<S: Solver> InternalMinsweeper for MinsweeperGame<S> {
     fn start(&mut self) -> &GameState {
         self.internal_start(None)
     }
@@ -310,7 +310,7 @@ impl InternalMinsweeper for MinsweeperGame {
             self.first = false;
 
             if let Some(solver) = &self.solver {
-                *self.gamestate_mut() = generate_solvable_game(self.board_size, solver.as_ref(), point);
+                *self.gamestate_mut() = generate_solvable_game(self.board_size, solver, point);
             } else {
                 *self.gamestate_mut() = generate_game(self.board_size);
             }
