@@ -234,7 +234,7 @@ fn generate_nmbers(board: &mut Board) {
     }
 }
 
-pub struct MinsweeperGame<S: Solver> {
+pub struct MinsweeperGame<S: Solver = Box<dyn Solver>> {
     board_size: BoardSize,
     game_state: GameState,
     player_game_state: GameState,
