@@ -1,7 +1,6 @@
 use crate::board::{Board, BoardSize, Point};
 use crate::solver::{GameResult, Solver};
 use crate::{check_interact, Cell, CellState, CellType, GameState, GameStatus, Minsweeper};
-use rand::Rng;
 use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
@@ -198,11 +197,10 @@ pub fn generate_game(board_size: BoardSize) -> GameState {
     let mut board = Board::empty(board_size);
 
     let mine = Cell::new(CellType::Mine, CellState::Unknown);
-    let mut rng = rand::rng();
     let mut mines = 0usize;
     while mines < board_size.mines().into() {
-        let point = (rng.random_range(0..board_size.width().into()),
-                     rng.random_range(0..board_size.height().into()));
+        let point = (fastrand::usize(0..board_size.width().into()),
+                     fastrand::usize(0..board_size.height().into()));
 
         if matches!(board[point].cell_type, CellType::Safe(_)) {
             board[point] = mine;
