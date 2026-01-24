@@ -166,7 +166,7 @@ mod tests {
     #[test]
     fn mia_solver_works_at_least() {
         println!("{:?}", ConventionalSize::Expert.size());
-        let mut game = MinsweeperGame::new(ConventionalSize::Expert.size(), Box::new(|| {}), Box::new(|| {}));
+        let mut game = MinsweeperGame::new(ConventionalSize::Expert.size(), || {}, || {});
         println!("starting");
         game.start_with_solver(MiaSolver);
 
@@ -177,7 +177,7 @@ mod tests {
 
     #[test]
     fn mia_solver_should_never_die() {
-        let mut game = MinsweeperGame::new(ConventionalSize::Expert.size(), Box::new(|| {}), Box::new(|| {}));
+        let mut game = MinsweeperGame::new(ConventionalSize::Expert.size(), || {}, || {});
 
         for _ in 0..100 {
             game.start_with_solver(SafeStart);

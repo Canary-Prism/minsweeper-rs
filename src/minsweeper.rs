@@ -233,19 +233,23 @@ fn generate_nmbers(board: &mut Board) {
     }
 }
 
-pub struct MinsweeperGame<S: Solver = Box<dyn Solver>, F: Fn() = Box<dyn Fn()>> {
+pub struct MinsweeperGame<
+    S: Solver = Box<dyn Solver>,
+    OnWin: Fn() = Box<dyn Fn()>,
+    OnLose: Fn() = Box<dyn Fn()>,
+> {
     board_size: BoardSize,
     game_state: GameState,
     player_game_state: GameState,
-    on_win: F,
-    on_lose: F,
+    on_win: OnWin,
+    on_lose: OnLose,
     first: bool,
     solver: Option<S>
 }
 
-impl<S: Solver, F: Fn()> MinsweeperGame<S, F> {
+impl<S: Solver, OnWin: Fn(), OnLose: Fn()> MinsweeperGame<S, OnWin, OnLose> {
 
-    pub fn new(board_size: BoardSize, on_win: F, on_lose: F) -> Self {
+    pub fn new(board_size: BoardSize, on_win: OnWin, on_lose: OnLose) -> Self {
         Self {
             board_size,
             game_state: GameState::new(GameStatus::Never, Board::empty(board_size), 0),
@@ -272,7 +276,7 @@ impl<S: Solver, F: Fn()> MinsweeperGame<S, F> {
     }
 }
 
-impl<S: Solver, F: Fn()> InternalMinsweeper for MinsweeperGame<S, F> {
+impl<S: Solver, OnWin: Fn(), OnLose: Fn()> InternalMinsweeper for MinsweeperGame<S, OnWin, OnLose> {
     fn start(&mut self) -> &GameState {
         self.internal_start(None)
     }
