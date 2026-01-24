@@ -4,6 +4,7 @@ use crate::{check_interact, Cell, CellState, CellType, GameState, GameStatus, Mi
 use rand::Rng;
 use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
 
 trait InternalMinsweeper {
 
@@ -234,19 +235,19 @@ fn generate_nmbers(board: &mut Board) {
     }
 }
 
-pub struct MinsweeperGame<S: Solver = Box<dyn Solver>> {
+pub struct MinsweeperGame<S: Solver = Box<dyn Solver>, F: Fn() = Box<dyn Fn()>> {
     board_size: BoardSize,
     game_state: GameState,
     player_game_state: GameState,
-    on_win: Box<dyn Fn()>,
-    on_lose: Box<dyn Fn()>,
+    on_win: F,
+    on_lose: F,
     first: bool,
     solver: Option<S>
 }
 
-impl<S: Solver> MinsweeperGame<S> {
+impl<S: Solver, F: Fn()> MinsweeperGame<S, F> {
 
-    pub fn new(board_size: BoardSize, on_win: Box<dyn Fn()>, on_lose: Box<dyn Fn()>) -> Self {
+    pub fn new(board_size: BoardSize, on_win: F, on_lose: F) -> Self {
         Self {
             board_size,
             game_state: GameState::new(GameStatus::Never, Board::empty(board_size), 0),
@@ -273,7 +274,7 @@ impl<S: Solver> MinsweeperGame<S> {
     }
 }
 
-impl<S: Solver> InternalMinsweeper for MinsweeperGame<S> {
+impl<S: Solver, F: Fn()> InternalMinsweeper for MinsweeperGame<S, F> {
     fn start(&mut self) -> &GameState {
         self.internal_start(None)
     }
