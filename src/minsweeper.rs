@@ -367,7 +367,7 @@ impl<S: Solver, OnWin: Fn(), OnLose: Fn()> InternalMinsweeper for MinsweeperGame
     }
 }
 
-impl<S: Solver + Send + Sync, OnWin: Fn() + Send + Sync, OnLose: Fn() + Send + Sync> MinsweeperGame<S, OnWin, OnLose> {
+impl<S: Solver + Send + Sync, OnWin: Fn(), OnLose: Fn()> MinsweeperGame<S, OnWin, OnLose> {
     pub async fn reveal_async(&mut self, point: Point) -> Result<&GameState, &GameState> {
         if check_interact(self, point).is_err() {
             return Err(self.player_gamestate())
@@ -436,7 +436,7 @@ pub fn generate_solvable_game(board_size: BoardSize, solver: &dyn Solver, point:
     }
 }
 
-pub async fn generate_solvable_game_async(board_size: BoardSize, solver: &dyn Solver, point: Point) -> GameState {
+pub async fn generate_solvable_game_async(board_size: BoardSize, solver: &(dyn Solver + Send + Sync), point: Point) -> GameState {
     loop {
         let Some(state) = try_generate_solvable_game_async(board_size, solver, point).await else {
             continue
@@ -444,7 +444,7 @@ pub async fn generate_solvable_game_async(board_size: BoardSize, solver: &dyn So
         return state
     }
 }
-async fn try_generate_solvable_game_async(board_size: BoardSize, solver: &dyn Solver, point: Point) -> Option<GameState> {
+async fn try_generate_solvable_game_async(board_size: BoardSize, solver: &(dyn Solver + Send + Sync), point: Point) -> Option<GameState> {
     let state = generate_game(board_size);
 
     let mut game = SetMinsweeperGame::new(state.clone());
