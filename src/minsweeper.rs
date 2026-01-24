@@ -274,6 +274,57 @@ impl<S: Solver, OnWin: Fn(), OnLose: Fn()> MinsweeperGame<S, OnWin, OnLose> {
     pub fn start_with_solver(&mut self, solver: S) -> &GameState {
         self.internal_start(solver.into())
     }
+
+    pub async fn reveal_async(&mut self, point: Point) -> Result<&GameState, &GameState> {
+        if check_interact(self, point).is_err() {
+            return Err(self.player_gamestate())
+        }
+
+        if self.first {
+            self.first = false;
+
+            if let Some(solver) = &self.solver {
+                *self.gamestate_mut() = generate_solvable_game_async(self.board_size, solver, point).await;
+            } else {
+                *self.gamestate_mut() = generate_game(self.board_size);
+            }
+        }
+
+
+        let success = self.internal_reveal(point);
+
+        if !success {
+            self.gamestate_mut().status = GameStatus::Lost;
+
+            self.on_lose();
+
+            return Ok(self.player_gamestate())
+        }
+
+        if self.gamestate_mut().board.has_won() {
+            self.gamestate_mut().status = GameStatus::Won;
+
+            self.on_win();
+
+            return Ok(self.player_gamestate())
+        }
+
+        Ok(self.player_gamestate())
+    }
+
+    pub async fn left_click_async(&mut self, point: Point) -> Result<&GameState, &GameState> {
+        if check_interact(self, point).is_err() {
+            return Err(self.gamestate())
+        }
+
+        let cell = self.gamestate().board[point];
+
+        match cell {
+            Cell { cell_type: CellType::Safe(_), cell_state: CellState::Revealed } => InternalMinsweeper::clear_around(self, point),
+            Cell { cell_state: CellState::Unknown, .. } => self.reveal_async(point).await,
+            _ => Err(self.gamestate())
+        }
+    }
 }
 
 impl<S: Solver, OnWin: Fn(), OnLose: Fn()> InternalMinsweeper for MinsweeperGame<S, OnWin, OnLose> {
@@ -380,6 +431,30 @@ pub fn generate_solvable_game(board_size: BoardSize, solver: &dyn Solver, point:
         if result == GameResult::Won {
             return state;
         }
+    }
+}
+
+pub async fn generate_solvable_game_async(board_size: BoardSize, solver: &dyn Solver, point: Point) -> GameState {
+    loop {
+        let Some(state) = try_generate_solvable_game_async(board_size, solver, point).await else {
+            continue
+        };
+        return state
+    }
+}
+async fn try_generate_solvable_game_async(board_size: BoardSize, solver: &dyn Solver, point: Point) -> Option<GameState> {
+    let state = generate_game(board_size);
+
+    let mut game = SetMinsweeperGame::new(state.clone());
+    Minsweeper::reveal(&mut game, point)
+            .expect("should always be able to successfully reveal");
+
+    let result = solver.solve_game(&mut game);
+
+    if result == GameResult::Won {
+        Some(state)
+    } else {
+        None
     }
 }
 
