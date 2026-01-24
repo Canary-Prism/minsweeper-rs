@@ -251,7 +251,8 @@ pub struct MinsweeperGame<
     on_win: OnWin,
     on_lose: OnLose,
     first: bool,
-    solver: Option<S>
+    solver: Option<S>,
+    rng: Rng,
 }
 
 impl<S: Solver, OnWin: Fn(), OnLose: Fn()> MinsweeperGame<S, OnWin, OnLose> {
@@ -264,7 +265,15 @@ impl<S: Solver, OnWin: Fn(), OnLose: Fn()> MinsweeperGame<S, OnWin, OnLose> {
             on_win,
             on_lose,
             first: true,
-            solver: None
+            solver: None,
+            rng: Rng::new(),
+        }
+    }
+
+    pub fn new_with_rng(board_size: BoardSize, on_win: OnWin, on_lose: OnLose, rng: Rng) -> Self {
+        Self {
+            rng,
+            ..Self::new(board_size, on_win, on_lose)
         }
     }
 
@@ -294,6 +303,10 @@ impl<S: Solver, OnWin: Fn(), OnLose: Fn()> InternalMinsweeper for MinsweeperGame
 
     fn on_lose(&self) {
         (self.on_lose)()
+    }
+
+    fn rng(&mut self) -> Rng {
+        self.rng.fork()
     }
 
     fn player_gamestate(&self) -> &GameState {
