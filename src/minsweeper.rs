@@ -407,6 +407,12 @@ pub mod nonblocking {
                     .game_state
                     .clone()
         }
+        
+        pub fn blocking_gamestate(&self) -> GameState {
+            self.minsweeper_game.blocking_read()
+                    .game_state
+                    .clone()
+        }
 
 
         pub async fn reveal(&self, point: Point) -> Result<GameState, GameState> {
