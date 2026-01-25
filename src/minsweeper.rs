@@ -3,7 +3,6 @@ use crate::solver::{GameResult, Solver};
 use crate::{check_interact, Cell, CellState, CellType, GameState, GameStatus, Minsweeper};
 use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
-use std::sync::Arc;
 
 trait InternalMinsweeper {
 
@@ -367,55 +366,120 @@ impl<S: Solver, OnWin: Fn(), OnLose: Fn()> InternalMinsweeper for MinsweeperGame
     }
 }
 
-impl<S: Solver + Send + Sync, OnWin: Fn(), OnLose: Fn()> MinsweeperGame<S, OnWin, OnLose> {
-    pub async fn reveal_async(&mut self, point: Point) -> Result<&GameState, &GameState> {
-        if check_interact(self, point).is_err() {
-            return Err(self.player_gamestate())
-        }
+#[cfg(feature = "async")]
+pub mod nonblocking {
+    use crate::board::{BoardSize, Point};
+    use crate::minsweeper::{generate_game, generate_solvable_game_async, InternalMinsweeper, MinsweeperGame};
+    use crate::solver::Solver;
+    use crate::{check_interact, Cell, CellState, CellType, GameState, Minsweeper};
+    use tokio::sync::{Mutex, RwLock};
 
-        if self.first {
-            self.first = false;
+    pub struct AsyncMinsweeperGame<S: Solver + Send + Sync, OnWin: Fn() + Send + Sync, OnLose: Fn() + Send + Sync> {
+        minsweeper_game: RwLock<MinsweeperGame<S, OnWin, OnLose>>,
+        generate_lock: Mutex<()>
 
-            if let Some(solver) = &self.solver {
-                *self.gamestate_mut() = generate_solvable_game_async(self.board_size, solver, point).await;
-            } else {
-                *self.gamestate_mut() = generate_game(self.board_size);
+    }
+
+    impl<S: Solver + Send + Sync + Clone, OnWin: Fn() + Send + Sync, OnLose: Fn() + Send + Sync> AsyncMinsweeperGame<S, OnWin, OnLose> {
+
+        pub fn new(board_size: BoardSize, on_win: OnWin, on_lose: OnLose) -> Self {
+            Self {
+                minsweeper_game: MinsweeperGame::new(board_size, on_win, on_lose).into(),
+                generate_lock: Default::default(),
             }
         }
 
-
-        let success = self.internal_reveal(point);
-
-        if !success {
-            self.gamestate_mut().status = GameStatus::Lost;
-
-            self.on_lose();
-
-            return Ok(self.player_gamestate())
+        pub async fn start(&self) -> GameState {
+            Minsweeper::start(&mut *self.minsweeper_game.write().await)
+                    .clone()
         }
 
-        if self.gamestate_mut().board.has_won() {
-            self.gamestate_mut().status = GameStatus::Won;
-
-            self.on_win();
-
-            return Ok(self.player_gamestate())
+        pub async fn start_with_solver(&self, solver: S) -> GameState {
+            self.minsweeper_game.write()
+                    .await
+                    .start_with_solver(solver)
+                    .clone()
         }
 
-        Ok(self.player_gamestate())
-    }
-
-    pub async fn left_click_async(&mut self, point: Point) -> Result<&GameState, &GameState> {
-        if check_interact(self, point).is_err() {
-            return Err(self.gamestate())
+        pub async fn gamestate(&self) -> GameState {
+            self.minsweeper_game.read()
+                    .await
+                    .game_state
+                    .clone()
         }
 
-        let cell = self.gamestate().board[point];
 
-        match cell {
-            Cell { cell_type: CellType::Safe(_), cell_state: CellState::Revealed } => InternalMinsweeper::clear_around(self, point),
-            Cell { cell_state: CellState::Unknown, .. } => self.reveal_async(point).await,
-            _ => Err(self.gamestate())
+        pub async fn reveal(&self, point: Point) -> Result<GameState, GameState> {
+            let mut game = self.minsweeper_game.write().await;
+            if check_interact(&*game, point).is_err() {
+                return Err(game.player_gamestate().clone())
+            }
+
+            if game.first {
+                game.first = false;
+
+
+                let solver = game.solver.clone();
+                let size = game.board_size;
+                drop(game);
+                let generate_guard = self.generate_lock.lock();
+                let gamestate = if let Some(solver) = solver {
+                    generate_solvable_game_async(size, &solver, point).await
+                } else {
+                    generate_game(size)
+                };
+                *self.minsweeper_game.write().await.gamestate_mut() = gamestate;
+                drop(generate_guard);
+            }
+
+            let mut game = self.minsweeper_game.write().await;
+            Minsweeper::reveal(&mut *game, point)
+                    .cloned()
+                    .map_err(Clone::clone)
+        }
+
+
+        pub async fn clear_around(&self, point: Point) -> Result<GameState, GameState> {
+            Minsweeper::clear_around(&mut *self.minsweeper_game.write().await, point)
+                    .cloned()
+                    .map_err(Clone::clone)
+        }
+
+        pub async fn set_flagged(&self, point: Point, flagged: bool) -> Result<GameState, GameState> {
+            Minsweeper::set_flagged(&mut *self.minsweeper_game.write().await, point, flagged)
+                    .cloned()
+                    .map_err(Clone::clone)
+        }
+
+        pub async fn toggle_flag(&self, point: Point) -> Result<GameState, GameState> {
+            Minsweeper::toggle_flag(&mut *self.minsweeper_game.write().await, point)
+                    .cloned()
+                    .map_err(Clone::clone)
+        }
+
+        pub async fn left_click(&self, point: Point) -> Result<GameState, GameState> {
+            let game = self.minsweeper_game.read().await;
+            if check_interact(&*game, point).is_err() {
+                return Err(game.gamestate().clone())
+            }
+
+            let cell = game.gamestate().board[point];
+
+            match cell {
+                Cell { cell_type: CellType::Safe(_), cell_state: CellState::Revealed } => {
+                    drop(game);
+                    self.clear_around(point).await
+                },
+                Cell { cell_state: CellState::Unknown, .. } => {
+                    drop(game);
+                    self.reveal(point).await
+                },
+                _ => Err(game.gamestate().clone())
+            }
+        }
+
+        pub async fn right_click(&self, point: Point) -> Result<GameState, GameState> {
+            self.toggle_flag(point).await
         }
     }
 }
@@ -436,7 +500,7 @@ pub fn generate_solvable_game(board_size: BoardSize, solver: &dyn Solver, point:
     }
 }
 
-pub async fn generate_solvable_game_async(board_size: BoardSize, solver: &(dyn Solver + Send + Sync), point: Point) -> GameState {
+pub async fn generate_solvable_game_async<S: Solver + Send + Sync>(board_size: BoardSize, solver: &S, point: Point) -> GameState {
     loop {
         let Some(state) = try_generate_solvable_game_async(board_size, solver, point).await else {
             continue
@@ -444,7 +508,7 @@ pub async fn generate_solvable_game_async(board_size: BoardSize, solver: &(dyn S
         return state
     }
 }
-async fn try_generate_solvable_game_async(board_size: BoardSize, solver: &(dyn Solver + Send + Sync), point: Point) -> Option<GameState> {
+async fn try_generate_solvable_game_async<S: Solver + Send + Sync>(board_size: BoardSize, solver: &S, point: Point) -> Option<GameState> {
     let state = generate_game(board_size);
 
     let mut game = SetMinsweeperGame::new(state.clone());
