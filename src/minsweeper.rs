@@ -437,9 +437,11 @@ pub mod nonblocking {
                 };
                 *self.minsweeper_game.write().await.gamestate_mut() = gamestate;
                 drop(generate_guard);
+
+                game = self.minsweeper_game.write().await;
             }
 
-            let mut game = self.minsweeper_game.write().await;
+            // let mut game = self.minsweeper_game.write().await;
             Minsweeper::reveal(&mut *game, point)
                     .cloned()
                     .map_err(Clone::clone)
