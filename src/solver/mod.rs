@@ -90,8 +90,8 @@ impl Move {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Action {
-    point: Point,
-    operation: Operation,
+    pub point: Point,
+    pub operation: Operation,
 }
 
 impl Action {
