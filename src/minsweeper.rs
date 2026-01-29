@@ -404,13 +404,13 @@ pub mod nonblocking {
         pub async fn gamestate(&self) -> GameState {
             self.minsweeper_game.read()
                     .await
-                    .game_state
+                    .player_gamestate()
                     .clone()
         }
 
         pub fn blocking_gamestate(&self) -> GameState {
             self.minsweeper_game.blocking_read()
-                    .game_state
+                    .player_gamestate()
                     .clone()
         }
 
