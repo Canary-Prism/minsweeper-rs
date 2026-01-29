@@ -19,3 +19,4 @@ tokio = { version = "1.49.0", features = ["sync"], optional = true }
 [features]
 linked-hash-set = ["hashlink"]
 async = ["tokio/sync"]
+tokio = ["async", "tokio/rt"]

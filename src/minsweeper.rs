@@ -407,7 +407,7 @@ pub mod nonblocking {
                     .game_state
                     .clone()
         }
-        
+
         pub fn blocking_gamestate(&self) -> GameState {
             self.minsweeper_game.blocking_read()
                     .game_state
@@ -428,6 +428,7 @@ pub mod nonblocking {
                 let solver = game.solver.clone();
                 let size = game.board_size;
                 drop(game);
+
                 let generate_guard = self.generate_lock.lock();
                 let gamestate = if let Some(solver) = solver {
                     generate_solvable_game_async(size, &solver, point).await
@@ -509,6 +510,8 @@ pub fn generate_solvable_game(board_size: BoardSize, solver: &dyn Solver, point:
 pub async fn generate_solvable_game_async<S: Solver + Send + Sync>(board_size: BoardSize, solver: &S, point: Point) -> GameState {
     loop {
         let Some(state) = try_generate_solvable_game_async(board_size, solver, point).await else {
+            #[cfg(feature = "tokio")]
+            tokio::task::yield_now().await;
             continue
         };
         return state
