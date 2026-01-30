@@ -1,18 +1,60 @@
 use crate::board::Point;
 use crate::solver::Operation::{Chord, Flag, Reveal};
-use crate::solver::{Action, Logic, Move, Reason, Solver};
-use crate::{CellState, CellType, GameState, GameStatus};
+use crate::solver::{Action, Actionable, GameResult, Logic, Move, Reason, Solver};
+use crate::{CellState, CellType, GameState, GameStatus, Minsweeper};
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::Sub;
+use enumset::{EnumSet, EnumSetType};
+
+#[derive(Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Hash)]
+pub enum Level {
+    Beginner,
+    Intermediate,
+    Expert
+}
+
+impl Level {
+    fn logics(self) -> EnumSet<MiaLogic> {
+        match self {
+            Level::Beginner => MiaLogic::Chord | MiaLogic::FlagChord,
+            Level::Intermediate => MiaLogic::RegionDeductionReveal | MiaLogic::RegionDeductionFlag
+                    | MiaLogic::ZeroMinesRemaining,
+            Level::Expert => MiaLogic::BruteForce | MiaLogic::BruteForceExhaustion,
+        }
+    }
+}
 
 #[derive(Copy, Clone, Debug)]
-pub struct MiaSolver;
+pub struct MiaSolver {
+    skill_level: Level,
+    required_level: Option<Level>,
+}
 
 impl MiaSolver {
     const BRUTE_FORCE_LIMIT: usize = 30;
+
+    pub const fn skill(level: Level) -> Self {
+        Self {
+            skill_level: level,
+            required_level: None,
+        }
+    }
+
+    pub const fn only(level: Level) -> Self {
+        Self {
+            skill_level: level,
+            required_level: Some(level),
+        }
+    }
+}
+
+impl Default for MiaSolver {
+    fn default() -> Self {
+        Self::skill(Level::Expert)
+    }
 }
 
 impl Display for MiaSolver {
@@ -21,9 +63,8 @@ impl Display for MiaSolver {
     }
 }
 
-impl Solver for MiaSolver {
-
-    fn solve(&self, state: &GameState) -> Option<Move> {
+impl MiaSolver {
+    fn internal_solve(&self, state: &GameState) -> Option<(Move, MiaLogic)> {
 
         let size = state.board.size();
 
@@ -49,7 +90,7 @@ impl Solver for MiaSolver {
             }
 
             if number as usize == marked_mines.len() && empty_spaces.len() > marked_mines.len() {
-                return Some(Move::single(Action::new(point, Chord), Some(Reason::new(MiaLogic::Chord, marked_mines))))
+                return Some((Move::single(Action::new(point, Chord), Some(Reason::new(MiaLogic::Chord, marked_mines))), MiaLogic::Chord))
             } else if number as usize == empty_spaces.len() {
                 let clicks: HashSet<_> = size.neighbours(point)
                         .filter(|e| state.board[*e].cell_state == CellState::Unknown)
@@ -57,7 +98,7 @@ impl Solver for MiaSolver {
                         .collect();
 
                 if !clicks.is_empty() {
-                    return Some(Move::multi(clicks, Some(Reason::new(MiaLogic::FlagChord, empty_spaces))));
+                    return Some((Move::multi(clicks, Some(Reason::new(MiaLogic::FlagChord, empty_spaces))), MiaLogic::FlagChord));
                 }
             } else if (number as usize) < marked_mines.len() {
                 let clicks: HashSet<_> = size.neighbours(point)
@@ -65,8 +106,12 @@ impl Solver for MiaSolver {
                         .map(|e| Action::new(e, Flag))
                         .collect();
 
-                return Some(Move::multi(clicks, Some(Reason::new(MiaLogic::FlagChord, empty_spaces))));
+                return Some((Move::multi(clicks, Some(Reason::new(MiaLogic::FlagChord, empty_spaces))), MiaLogic::FlagChord));
             }
+        }
+
+        if self.skill_level < Level::Intermediate {
+            return None
         }
 
         // hehe logical deduction
@@ -184,21 +229,21 @@ impl Solver for MiaSolver {
                         }
 
                         if remaining.number == 0 {
-                            return Some(Move::multi(
+                            return Some((Move::multi(
                                 remaining.points
                                         .into_iter()
                                         .map(|e| Action::new(e, Reveal))
                                         .collect(),
                                 Some(Reason::new(MiaLogic::RegionDeductionReveal, contained.points.clone()))
-                            ))
+                            ), MiaLogic::RegionDeductionReveal))
                         } else if remaining.number > 0 && remaining.number as usize == remaining.points.len() {
-                            return Some(Move::multi(
+                            return Some((Move::multi(
                                 remaining.points
                                         .into_iter()
                                         .map(|e| Action::new(e, Flag))
                                         .collect(),
                                 Some(Reason::new(MiaLogic::RegionDeductionFlag, contained.points.clone()))
-                            ))
+                            ), MiaLogic::RegionDeductionFlag))
 
                         }
 
@@ -220,13 +265,13 @@ impl Solver for MiaSolver {
                         }
 
                         if remaining.number > 0 && remaining.number as usize == remaining.points.len() {
-                            return Some(Move::multi(
+                            return Some((Move::multi(
                                 remaining.points
                                         .into_iter()
                                         .map(|e| Action::new(e, Flag))
                                         .collect(),
                                 Some(Reason::new(MiaLogic::RegionDeductionFlag, touching.points.clone()))
-                            ))
+                            ), MiaLogic::RegionDeductionFlag))
                         }
                     }
                 }
@@ -245,8 +290,12 @@ impl Solver for MiaSolver {
                     .collect();
 
             if !clicks.is_empty() {
-                return Some(Move::multi(clicks, Some(Reason::new(MiaLogic::RegionDeductionFlag, HashSet::new()))))
+                return Some((Move::multi(clicks, Some(Reason::new(MiaLogic::ZeroMinesRemaining, HashSet::new()))), MiaLogic::ZeroMinesRemaining))
             }
+        }
+
+        if self.skill_level < Level::Expert {
+            return None
         }
 
         let mut empties = HashSet::new();
@@ -280,7 +329,7 @@ impl Solver for MiaSolver {
                 }
 
                 if !clicks.is_empty() {
-                    return Some(Move::multi(clicks, Some(Reason::new(MiaLogic::BruteForce, empties))))
+                    return Some((Move::multi(clicks, Some(Reason::new(MiaLogic::BruteForce, empties))), MiaLogic::BruteForce))
                 }
 
                 if states.iter().all(|e| e.remaining_mines == 0) {
@@ -293,7 +342,7 @@ impl Solver for MiaSolver {
                 }
 
                 if !clicks.is_empty() {
-                    return Some(Move::multi(clicks, Some(Reason::new(MiaLogic::BruteForceExhaustion, empties))))
+                    return Some((Move::multi(clicks, Some(Reason::new(MiaLogic::BruteForceExhaustion, empties))), MiaLogic::BruteForceExhaustion))
                 }
 
             }
@@ -301,6 +350,43 @@ impl Solver for MiaSolver {
         }
 
         None
+    }
+}
+
+impl Solver for MiaSolver {
+
+    fn solve(&self, state: &GameState) -> Option<Move> {
+        self.internal_solve(state)
+                .map(|(e, _)| e)
+    }
+
+    fn solve_game(&self, minsweeper: &mut dyn Minsweeper) -> GameResult {
+
+        let mut requirement_met = self.required_level.is_some();
+        let required_logic = self.required_level
+                .map(Level::logics)
+                .unwrap_or_default();
+        let mut state = minsweeper.gamestate();
+
+        while state.status == GameStatus::Playing {
+            let Some((Move { actions, ..}, logic)) = self.internal_solve(state) else { break };
+
+            if !requirement_met && required_logic.contains(logic) {
+                requirement_met = true;
+            }
+
+            for action in actions {
+                state = minsweeper.action(action).into()
+            }
+        }
+
+        match state.status {
+            GameStatus::Won if requirement_met => GameResult::Won,
+            GameStatus::Lost => GameResult::Lost,
+            GameStatus::Playing => GameResult::Resigned,
+            _ => GameResult::Resigned
+        }
+
     }
 }
 
@@ -412,7 +498,7 @@ fn simulate_reveal(state: &mut GameState, point: Point) {
 }
 
 
-#[derive(Copy, Clone, Debug)]
+#[derive(EnumSetType, Debug)]
 pub enum MiaLogic {
     Chord,
     FlagChord,
