@@ -168,7 +168,7 @@ mod tests {
         println!("{:?}", ConventionalSize::Expert.size());
         let mut game = MinsweeperGame::new(ConventionalSize::Expert.size(), || {}, || {});
         println!("starting");
-        game.start_with_solver(MiaSolver);
+        game.start_with_solver(MiaSolver::default());
 
         println!("revealing");
         game.reveal((0, 0))
@@ -185,7 +185,7 @@ mod tests {
             game.reveal((0, 0))
                     .expect("first click shouldn't fail");
 
-            let result = MiaSolver.solve_game(&mut game);
+            let result = MiaSolver::default().solve_game(&mut game);
 
             if result == Lost {
                 panic!("mia solver shouldn't lose\n{}", game.gamestate().board)
