@@ -362,7 +362,7 @@ impl Solver for MiaSolver {
 
     fn solve_game(&self, minsweeper: &mut dyn Minsweeper) -> GameResult {
 
-        let mut requirement_met = self.required_level.is_some();
+        let mut requirement_met = self.required_level.is_none();
         let required_logic = self.required_level
                 .map(Level::logics)
                 .unwrap_or_default();
