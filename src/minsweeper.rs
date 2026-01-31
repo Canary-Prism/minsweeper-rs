@@ -390,11 +390,13 @@ pub mod nonblocking {
         }
 
         pub async fn start(&self) -> GameState {
+            drop(self.generate_lock.lock().await);
             Minsweeper::start(&mut *self.minsweeper_game.write().await)
                     .clone()
         }
 
         pub async fn start_with_solver(&self, solver: S) -> GameState {
+            drop(self.generate_lock.lock().await);
             self.minsweeper_game.write()
                     .await
                     .start_with_solver(solver)
@@ -416,6 +418,7 @@ pub mod nonblocking {
 
 
         pub async fn reveal(&self, point: Point) -> Result<GameState, GameState> {
+            drop(self.generate_lock.lock().await);
             let mut game = self.minsweeper_game.write().await;
             if check_interact(&*game, point).is_err() {
                 return Err(game.player_gamestate().clone())
@@ -449,18 +452,21 @@ pub mod nonblocking {
 
 
         pub async fn clear_around(&self, point: Point) -> Result<GameState, GameState> {
+            drop(self.generate_lock.lock().await);
             Minsweeper::clear_around(&mut *self.minsweeper_game.write().await, point)
                     .cloned()
                     .map_err(Clone::clone)
         }
 
         pub async fn set_flagged(&self, point: Point, flagged: bool) -> Result<GameState, GameState> {
+            drop(self.generate_lock.lock().await);
             Minsweeper::set_flagged(&mut *self.minsweeper_game.write().await, point, flagged)
                     .cloned()
                     .map_err(Clone::clone)
         }
 
         pub async fn toggle_flag(&self, point: Point) -> Result<GameState, GameState> {
+            drop(self.generate_lock.lock().await);
             Minsweeper::toggle_flag(&mut *self.minsweeper_game.write().await, point)
                     .cloned()
                     .map_err(Clone::clone)
