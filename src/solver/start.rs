@@ -43,6 +43,24 @@ impl Solver for ZeroStart {
 }
 
 #[derive(Copy, Clone, Debug)]
+pub struct WinStart;
+
+impl Solver for WinStart {
+
+    fn solve(&self, _game_state: &GameState) -> Option<Move> {
+        None
+    }
+
+    fn solve_game(&self, minsweeper: &mut dyn Minsweeper) -> GameResult {
+        match minsweeper.gamestate().status {
+            GameStatus::Won => GameResult::Won,
+            GameStatus::Lost => GameResult::Lost,
+            GameStatus::Playing | GameStatus::Never => GameResult::Resigned
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
 pub enum StartLogic {}
 
 impl Display for StartLogic {
