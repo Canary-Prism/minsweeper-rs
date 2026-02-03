@@ -1,3 +1,5 @@
+use fastrand::Rng;
+
 use crate::board::{Board, BoardSize, Point};
 use crate::solver::{GameResult, Solver};
 use crate::{check_interact, Cell, CellState, CellType, GameState, GameStatus, Minsweeper};
@@ -13,6 +15,11 @@ trait InternalMinsweeper {
 
     fn player_gamestate(&self) -> &GameState;
     fn gamestate_mut(&mut self) -> impl DerefMut<Target = GameState>;
+
+    /// Note: The safest way to implement this is to fork some stored RNG
+    fn rng(&mut self) -> Rng {
+        Rng::new()
+    }
 
     fn reveal(&mut self, point: Point) -> Result<&GameState, &GameState> {
         if check_interact(self, point).is_err() {
@@ -192,14 +199,14 @@ impl<T: InternalMinsweeper + ?Sized> Minsweeper for T {
 }
 
 
-pub fn generate_game(board_size: BoardSize) -> GameState {
+pub fn generate_game(board_size: BoardSize, rng: &mut Rng) -> GameState {
     let mut board = Board::empty(board_size);
 
     let mine = Cell::new(CellType::Mine, CellState::Unknown);
     let mut mines = 0usize;
     while mines < board_size.mines().into() {
-        let point = (fastrand::usize(0..board_size.width().into()),
-                     fastrand::usize(0..board_size.height().into()));
+        let point = (rng.usize(0..board_size.width().into()),
+                     rng.usize(0..board_size.height().into()));
 
         if matches!(board[point].cell_type, CellType::Safe(_)) {
             board[point] = mine;
@@ -243,7 +250,8 @@ pub struct MinsweeperGame<
     on_win: OnWin,
     on_lose: OnLose,
     first: bool,
-    solver: Option<S>
+    solver: Option<S>,
+    rng: Rng,
 }
 
 impl<S: Solver, OnWin: Fn(), OnLose: Fn()> MinsweeperGame<S, OnWin, OnLose> {
@@ -256,7 +264,15 @@ impl<S: Solver, OnWin: Fn(), OnLose: Fn()> MinsweeperGame<S, OnWin, OnLose> {
             on_win,
             on_lose,
             first: true,
-            solver: None
+            solver: None,
+            rng: Rng::new(),
+        }
+    }
+
+    pub fn new_with_rng(board_size: BoardSize, on_win: OnWin, on_lose: OnLose, rng: Rng) -> Self {
+        Self {
+            rng,
+            ..Self::new(board_size, on_win, on_lose)
         }
     }
 
@@ -288,6 +304,10 @@ impl<S: Solver, OnWin: Fn(), OnLose: Fn()> InternalMinsweeper for MinsweeperGame
         (self.on_lose)()
     }
 
+    fn rng(&mut self) -> Rng {
+        self.rng.fork()
+    }
+
     fn player_gamestate(&self) -> &GameState {
         if self.game_state.status == GameStatus::Playing {
             &self.player_game_state
@@ -311,10 +331,12 @@ impl<S: Solver, OnWin: Fn(), OnLose: Fn()> InternalMinsweeper for MinsweeperGame
         if self.first {
             self.first = false;
 
+            let mut rng = self.rng();
+
             if let Some(solver) = &self.solver {
-                *self.gamestate_mut() = generate_solvable_game(self.board_size, solver, point);
+                *self.gamestate_mut() = generate_solvable_game(self.board_size, solver, point, &mut rng);
             } else {
-                *self.gamestate_mut() = generate_game(self.board_size);
+                *self.gamestate_mut() = generate_game(self.board_size, &mut rng);
             }
         }
 
@@ -499,9 +521,9 @@ pub mod nonblocking {
     }
 }
 
-pub fn generate_solvable_game(board_size: BoardSize, solver: &dyn Solver, point: Point) -> GameState {
+pub fn generate_solvable_game(board_size: BoardSize, solver: &dyn Solver, point: Point, rng: &mut Rng) -> GameState {
     loop {
-        let state = generate_game(board_size);
+        let state = generate_game(board_size, rng);
 
         let mut game = SetMinsweeperGame::new(state.clone());
         Minsweeper::reveal(&mut game, point)
@@ -608,4 +630,3 @@ impl Drop for GameStateHandle<'_> {
         *self.obfuscated_game_state = self.game_state.hide_mines()
     }
 }
-
