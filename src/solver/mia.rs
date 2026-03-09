@@ -432,6 +432,11 @@ fn brute_force_2(empties: &Vec<Point>, start: usize, state: &mut GameState, resu
             brute_force_2(empties, i + 1, state, result);
         }
         simulate_right_click(state, empties[i]);
+        simulate_reveal(state, empties[i]);
+
+    }
+    for point in empties {
+        simulate_unreveal(state, *point)
     }
 }
 
@@ -442,6 +447,15 @@ fn no_overflags(board: &Board) -> bool {
                 .neighbours(point)
                 .map(|neighbour| if board[neighbour].cell_state == CellState::Flagged { 1 } else { 0 })
                 .sum::<u8>() > n {
+            return false
+        }
+    }
+    for point in board.size().points() {
+        if let CellType::Safe(n) = board[point].cell_type && n > 0
+                && board.size()
+                .neighbours(point)
+                .map(|neighbour| if matches!(board[neighbour].cell_state, CellState::Flagged | CellState::Unknown) { 1 } else { 0 })
+                .sum::<u8>() < n {
             return false
         }
     }
@@ -566,6 +580,11 @@ fn simulate_reveal(state: &mut GameState, point: Point) {
     // it is normally illegal to have a revealed cell still be unknown
     // but such are the circumstances we find ourselves in
     state.board[point].cell_state = CellState::Revealed;
+}
+fn simulate_unreveal(state: &mut GameState, point: Point) {
+    // it is normally illegal to have a revealed cell still be unknown
+    // but such are the circumstances we find ourselves in
+    state.board[point].cell_state = CellState::Unknown;
 }
 
 
