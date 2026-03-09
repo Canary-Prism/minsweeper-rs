@@ -196,16 +196,11 @@ pub fn generate_game(board_size: BoardSize) -> GameState {
     let mut board = Board::empty(board_size);
 
     let mine = Cell::new(CellType::Mine, CellState::Unknown);
-    let mut mines = 0usize;
-    while mines < board_size.mines().into() {
-        let point = (fastrand::usize(0..board_size.width().into()),
-                     fastrand::usize(0..board_size.height().into()));
-
-        if matches!(board[point].cell_type, CellType::Safe(_)) {
-            board[point] = mine;
-            mines += 1;
-        }
-    };
+    let mut points: Vec<Point> = board_size.points().collect();
+    fastrand::shuffle(&mut points);
+    for point in &points[..board_size.mines().get()] {
+        board[*point] = mine;
+    }
 
     generate_nmbers(&mut board);
 
