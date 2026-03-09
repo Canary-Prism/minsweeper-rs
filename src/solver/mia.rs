@@ -318,7 +318,8 @@ impl MiaSolver {
 
             let mut result = BruteForceResult::new(size);
 
-            brute_force_2(&empties.iter().copied().collect(), 0, &mut state.clone(), &mut result);
+            brute_force_3(&empties, &adjacents.iter().copied().collect(), 0, &mut state.clone(), &mut result);
+            // brute_force_2(&empties.iter().copied().collect(), 0, &mut state.clone(), &mut result);
 
             if result.solve {
                 let mut clicks = HashSet::new();
@@ -403,6 +404,64 @@ struct BruteForceResult {
 impl BruteForceResult {
     pub fn new(board_size: BoardSize) -> Self {
         Self { solve: false, always_flag: board_size.points().collect(), never_flag: board_size.points().collect(), exhaustion: true }
+    }
+}
+
+fn brute_force_3(empties: &HashSet<Point>, adjacents: &Vec<Point>, adjacent_index: usize, state: &mut GameState, result: &mut BruteForceResult) {
+    if is_solved(&state.board) {
+        if state.remaining_mines != 0 {
+            result.exhaustion = false;
+        }
+
+        for point in empties {
+            if state.board[*point].cell_state == CellState::Flagged {
+                result.never_flag.remove(point);
+            } else {
+                result.always_flag.remove(point);
+            }
+        }
+
+        result.solve = true;
+        return
+    }
+    if state.remaining_mines == 0 {
+        return
+    }
+    if adjacent_index >= adjacents.len() {
+        return
+    }
+
+    let adjacent = adjacents[adjacent_index];
+    let CellType::Safe(n) = state.board[adjacent].cell_type else { unreachable!() };
+    let flagged = state.board.size()
+            .neighbours(adjacent)
+            .filter(|point| state.board[*point].cell_state == CellState::Flagged)
+            .count();
+    if n < flagged as u8 {
+        return
+    }
+    let flaggable = state.board.size()
+            .neighbours(adjacent)
+            .filter(|point| state.board[*point].cell_state == CellState::Unknown)
+            .collect();
+    recurse_flag(empties, adjacents, adjacent_index, &flaggable, 0, n as usize - flagged, state, result);
+}
+
+fn recurse_flag(empties: &HashSet<Point>, adjacents: &Vec<Point>, adjacent_index: usize, flaggable: &Vec<Point>, start: usize, mines_to_flag: usize, state: &mut GameState, result: &mut BruteForceResult) {
+
+    if mines_to_flag == 0 {
+        brute_force_3(empties, adjacents, adjacent_index + 1, state, result);
+        return
+    }
+    for i in start..flaggable.len() {
+
+        simulate_right_click(state, flaggable[i]);
+        recurse_flag(empties, adjacents, adjacent_index, flaggable, i + 1, mines_to_flag - 1, state, result);
+        simulate_right_click(state, flaggable[i]);
+        simulate_reveal(state, flaggable[i])
+    }
+    for point in flaggable {
+        simulate_unreveal(state, *point);
     }
 }
 
