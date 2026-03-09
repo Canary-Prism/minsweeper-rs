@@ -450,7 +450,13 @@ fn brute_force_3(empties: &HashSet<Point>, adjacents: &Vec<Point>, adjacent_inde
 fn recurse_flag(empties: &HashSet<Point>, adjacents: &Vec<Point>, adjacent_index: usize, flaggable: &Vec<Point>, start: usize, mines_to_flag: usize, state: &mut GameState, result: &mut BruteForceResult) {
 
     if mines_to_flag == 0 {
+        for point in &flaggable[start..] {
+            simulate_reveal(state, *point);
+        }
         brute_force_3(empties, adjacents, adjacent_index + 1, state, result);
+        for point in &flaggable[start..] {
+            simulate_unreveal(state, *point);
+        }
         return
     }
     for i in start..flaggable.len() {
@@ -460,7 +466,7 @@ fn recurse_flag(empties: &HashSet<Point>, adjacents: &Vec<Point>, adjacent_index
         simulate_right_click(state, flaggable[i]);
         simulate_reveal(state, flaggable[i])
     }
-    for point in flaggable {
+    for point in &flaggable[start..] {
         simulate_unreveal(state, *point);
     }
 }
