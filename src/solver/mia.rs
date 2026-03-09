@@ -1,4 +1,4 @@
-use crate::board::Point;
+use crate::board::{Board, BoardSize, Point};
 use crate::solver::Operation::{Chord, Flag, Reveal};
 use crate::solver::{Action, Actionable, GameResult, Logic, Move, Reason, Solver};
 use crate::{CellState, CellType, GameState, GameStatus, Minsweeper};
@@ -313,17 +313,21 @@ impl MiaSolver {
         }
 
         if empties.len() < Self::BRUTE_FORCE_LIMIT && !adjacents.is_empty() {
-            let states: Vec<GameState> = brute_force(&adjacents.into_iter().collect(), 0, state)
-                    .collect();
+            // let states: Vec<GameState> = brute_force(&adjacents.into_iter().collect(), 0, state)
+            //         .collect();
 
-            if !states.is_empty() {
+            let mut result = BruteForceResult::new(size);
+
+            brute_force_2(&empties.iter().copied().collect(), 0, &mut state.clone(), &mut result);
+
+            if result.solve {
                 let mut clicks = HashSet::new();
 
                 for point in empties.iter().copied() {
-                    if states.iter().all(|e| e.board[point].cell_state != CellState::Flagged) {
+                    if result.never_flag.contains(&point) {
                         clicks.insert(Action::new(point, Reveal));
                     }
-                    if states.iter().all(|e| e.board[point].cell_state == CellState::Flagged) {
+                    if result.always_flag.contains(&point) {
                         clicks.insert(Action::new(point, Flag));
                     }
                 }
@@ -332,10 +336,10 @@ impl MiaSolver {
                     return Some((Move::multi(clicks, Some(Reason::new(MiaLogic::BruteForce, empties))), MiaLogic::BruteForce))
                 }
 
-                if states.iter().all(|e| e.remaining_mines == 0) {
+                if result.exhaustion {
                     for point in size.points() {
                         if state.board[point].cell_state == CellState::Unknown
-                                && states.iter().all(|e| e.board[point].cell_state != CellState::Flagged) {
+                                && result.never_flag.contains(&point) {
                             clicks.insert(Action::new(point, Reveal));
                         }
                     }
@@ -361,7 +365,6 @@ impl Solver for MiaSolver {
     }
 
     fn solve_game(&self, minsweeper: &mut dyn Minsweeper) -> GameResult {
-
         let mut requirement_met = self.required_level.is_none();
         let required_logic = self.required_level
                 .map(Level::logics)
@@ -390,91 +393,159 @@ impl Solver for MiaSolver {
     }
 }
 
-fn brute_force(points: &Vec<Point>, index: usize, state: &GameState) -> Box<dyn Iterator<Item = GameState>> {
-    let size = state.board.size();
-    let mut empties = vec![];
-    let current = points[index];
+struct BruteForceResult {
+    solve: bool,
+    always_flag: HashSet<Point>,
+    never_flag: HashSet<Point>,
+    exhaustion: bool
+}
 
-    let mut flags = 0;
-
-    let CellType::Safe(number) = state.board[current].cell_type else {
-        unreachable!()
-    };
-
-    for point in size.neighbours(current) {
-        match state.board[point].cell_state {
-            CellState::Unknown => empties.push(point),
-            CellState::Flagged => flags += 1,
-            _ => {}
-        }
+impl BruteForceResult {
+    pub fn new(board_size: BoardSize) -> Self {
+        Self { solve: false, always_flag: board_size.points().collect(), never_flag: board_size.points().collect(), exhaustion: true }
     }
+}
 
-    let mines_to_flag = number as isize - flags;
-
-    if mines_to_flag > state.remaining_mines || mines_to_flag as usize > empties.len() {
-        return Box::new(std::iter::empty())
-    }
-
-    if mines_to_flag == 0 || empties.is_empty() {
-        if index + 1 == points.len() {
-            return Box::new(std::iter::once(state.clone()));
+fn brute_force_2(empties: &Vec<Point>, start: usize, state: &mut GameState, result: &mut BruteForceResult) {
+    if is_solved(&state.board) {
+        if state.remaining_mines != 0 {
+            result.exhaustion = false;
         }
-        return brute_force(points, index + 1, state);
-    };
 
-    let mut stream: Vec<Box<dyn Iterator<Item = GameState>>> = vec![];
-
-    for flag_combinations in get_flag_combinations(&empties, mines_to_flag) {
-        let mut state_copy = state.clone();
-
-        for point in &empties {
-            if flag_combinations.contains(point) {
-                simulate_right_click(&mut state_copy, *point)
+        for point in empties {
+            if state.board[*point].cell_state == CellState::Flagged {
+                result.never_flag.remove(point);
             } else {
-                simulate_reveal(&mut state_copy, *point)
+                result.always_flag.remove(point);
             }
         }
 
-        if index + 1 == points.len() {
-            stream.push(Box::new(std::iter::once(state_copy)))
-        } else {
-            stream.push(Box::new(brute_force(points, index + 1, &state_copy)))
-        }
+        result.solve = true;
+        return
     }
-
-    Box::new(stream.into_iter()
-            .flatten())
-}
-
-fn get_flag_combinations(empties: &Vec<Point>, mines_to_flag: isize) -> Vec<HashSet<Point>> {
-    if empties.len() < mines_to_flag as usize {
-        return Vec::new()
+    if state.remaining_mines == 0 {
+        return
     }
-
-    recursive_get_flag_combinations(HashSet::new(), empties, 0, mines_to_flag)
-            .collect()
-}
-
-fn recursive_get_flag_combinations(selected: HashSet<Point>, empties: &Vec<Point>, start: usize, mines_to_flag: isize) -> Box<dyn Iterator<Item = HashSet<Point>>> {
-    if mines_to_flag < 1 {
-        return Box::new(std::iter::empty())
-    }
-
-    let mut stream: Vec<Box<dyn Iterator<Item = HashSet<Point>>>> = vec![];
-
     for i in start..empties.len() {
-        let mut selected = selected.clone();
-        selected.insert(empties[i]);
-        if mines_to_flag == 1 {
-            stream.push(Box::new(std::iter::once(selected)))
-        } else {
-            stream.push(recursive_get_flag_combinations(selected, empties, start + 1, mines_to_flag - 1));
+        simulate_right_click(state, empties[i]);
+        if no_overflags(&state.board) {
+            brute_force_2(empties, i + 1, state, result);
+        }
+        simulate_right_click(state, empties[i]);
+    }
+}
+
+fn no_overflags(board: &Board) -> bool {
+    for point in board.size().points() {
+        if let CellType::Safe(n) = board[point].cell_type && n > 0
+                && board.size()
+                .neighbours(point)
+                .map(|neighbour| if board[neighbour].cell_state == CellState::Flagged { 1 } else { 0 })
+                .sum::<u8>() > n {
+            return false
         }
     }
-
-    Box::new(stream.into_iter()
-            .flatten())
+    true
 }
+
+fn is_solved(board: &Board) -> bool {
+    for point in board.size().points() {
+        if let CellType::Safe(n) = board[point].cell_type && n > 0
+                && board.size()
+                .neighbours(point)
+                .map(|neighbour| if board[neighbour].cell_state == CellState::Flagged { 1 } else { 0 })
+                .sum::<u8>() != n {
+            return false
+        }
+    }
+    true
+}
+
+// fn brute_force(points: &Vec<Point>, index: usize, state: &GameState) -> Box<dyn Iterator<Item = GameState>> {
+//     let size = state.board.size();
+//     let mut empties = vec![];
+//     let current = points[index];
+//
+//     let mut flags = 0;
+//
+//     let CellType::Safe(number) = state.board[current].cell_type else {
+//         unreachable!()
+//     };
+//
+//     for point in size.neighbours(current) {
+//         match state.board[point].cell_state {
+//             CellState::Unknown => empties.push(point),
+//             CellState::Flagged => flags += 1,
+//             _ => {}
+//         }
+//     }
+//
+//     let mines_to_flag = number as isize - flags;
+//
+//     if mines_to_flag > state.remaining_mines || mines_to_flag as usize > empties.len() {
+//         return Box::new(std::iter::empty())
+//     }
+//
+//     if mines_to_flag == 0 || empties.is_empty() {
+//         if index + 1 == points.len() {
+//             return Box::new(std::iter::once(state.clone()));
+//         }
+//         return brute_force(points, index + 1, state);
+//     };
+//
+//     let mut stream: Vec<Box<dyn Iterator<Item = GameState>>> = vec![];
+//
+//     for flag_combinations in get_flag_combinations(&empties, mines_to_flag) {
+//         let mut state_copy = state.clone();
+//
+//         for point in &empties {
+//             if flag_combinations.contains(point) {
+//                 simulate_right_click(&mut state_copy, *point)
+//             } else {
+//                 simulate_reveal(&mut state_copy, *point)
+//             }
+//         }
+//
+//         if index + 1 == points.len() {
+//             stream.push(Box::new(std::iter::once(state_copy)))
+//         } else {
+//             stream.push(Box::new(brute_force(points, index + 1, &state_copy)))
+//         }
+//     }
+//
+//     Box::new(stream.into_iter()
+//             .flatten())
+// }
+//
+// fn get_flag_combinations(empties: &Vec<Point>, mines_to_flag: isize) -> Vec<HashSet<Point>> {
+//     if empties.len() < mines_to_flag as usize {
+//         return Vec::new()
+//     }
+//
+//     recursive_get_flag_combinations(HashSet::new(), empties, 0, mines_to_flag)
+//             .collect()
+// }
+//
+// fn recursive_get_flag_combinations(selected: HashSet<Point>, empties: &Vec<Point>, start: usize, mines_to_flag: isize) -> Box<dyn Iterator<Item = HashSet<Point>>> {
+//     if mines_to_flag < 1 {
+//         return Box::new(std::iter::empty())
+//     }
+//
+//     let mut stream: Vec<Box<dyn Iterator<Item = HashSet<Point>>>> = vec![];
+//
+//     for i in start..empties.len() {
+//         let mut selected = selected.clone();
+//         selected.insert(empties[i]);
+//         if mines_to_flag == 1 {
+//             stream.push(Box::new(std::iter::once(selected)))
+//         } else {
+//             stream.push(recursive_get_flag_combinations(selected, empties, start + 1, mines_to_flag - 1));
+//         }
+//     }
+//
+//     Box::new(stream.into_iter()
+//             .flatten())
+// }
 
 fn simulate_right_click(state: &mut GameState, point: Point) {
     let cell = &mut state.board[point];
