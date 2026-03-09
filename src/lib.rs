@@ -97,6 +97,7 @@ impl GameState {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Cell {
     pub cell_type: CellType,
     pub cell_state: CellState
@@ -127,6 +128,7 @@ impl Display for Cell {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum CellType {
     Safe(u8), Mine, Unknown
 }
@@ -135,6 +137,7 @@ impl CellType {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum CellState {
     Unknown, Revealed, Flagged
 }

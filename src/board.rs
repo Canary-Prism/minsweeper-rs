@@ -7,6 +7,7 @@ use std::ops::{Index, IndexMut};
 use std::vec::IntoIter;
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Board {
     grid: Vec<Vec<Cell>>,
     size: BoardSize
@@ -161,6 +162,7 @@ impl Display for BoardSizeError {
 impl Error for BoardSizeError {}
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BoardSize {
     width: NonZeroUsize,
     height: NonZeroUsize,
