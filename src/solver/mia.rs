@@ -471,61 +471,61 @@ fn recurse_flag(empties: &HashSet<Point>, adjacents: &Vec<Point>, adjacent_index
     }
 }
 
-fn brute_force_2(empties: &Vec<Point>, start: usize, state: &mut GameState, result: &mut BruteForceResult) {
-    if is_solved(&state.board) {
-        if state.remaining_mines != 0 {
-            result.exhaustion = false;
-        }
-
-        for point in empties {
-            if state.board[*point].cell_state == CellState::Flagged {
-                result.never_flag.remove(point);
-            } else {
-                result.always_flag.remove(point);
-            }
-        }
-
-        result.solve = true;
-        return
-    }
-    if state.remaining_mines == 0 {
-        return
-    }
-    for i in start..empties.len() {
-        simulate_right_click(state, empties[i]);
-        if no_overflags(&state.board) {
-            brute_force_2(empties, i + 1, state, result);
-        }
-        simulate_right_click(state, empties[i]);
-        simulate_reveal(state, empties[i]);
-
-    }
-    for point in empties {
-        simulate_unreveal(state, *point)
-    }
-}
-
-fn no_overflags(board: &Board) -> bool {
-    for point in board.size().points() {
-        if let CellType::Safe(n) = board[point].cell_type && n > 0
-                && board.size()
-                .neighbours(point)
-                .map(|neighbour| if board[neighbour].cell_state == CellState::Flagged { 1 } else { 0 })
-                .sum::<u8>() > n {
-            return false
-        }
-    }
-    for point in board.size().points() {
-        if let CellType::Safe(n) = board[point].cell_type && n > 0
-                && board.size()
-                .neighbours(point)
-                .map(|neighbour| if matches!(board[neighbour].cell_state, CellState::Flagged | CellState::Unknown) { 1 } else { 0 })
-                .sum::<u8>() < n {
-            return false
-        }
-    }
-    true
-}
+// fn brute_force_2(empties: &Vec<Point>, start: usize, state: &mut GameState, result: &mut BruteForceResult) {
+//     if is_solved(&state.board) {
+//         if state.remaining_mines != 0 {
+//             result.exhaustion = false;
+//         }
+//
+//         for point in empties {
+//             if state.board[*point].cell_state == CellState::Flagged {
+//                 result.never_flag.remove(point);
+//             } else {
+//                 result.always_flag.remove(point);
+//             }
+//         }
+//
+//         result.solve = true;
+//         return
+//     }
+//     if state.remaining_mines == 0 {
+//         return
+//     }
+//     for i in start..empties.len() {
+//         simulate_right_click(state, empties[i]);
+//         if no_overflags(&state.board) {
+//             brute_force_2(empties, i + 1, state, result);
+//         }
+//         simulate_right_click(state, empties[i]);
+//         simulate_reveal(state, empties[i]);
+//
+//     }
+//     for point in empties {
+//         simulate_unreveal(state, *point)
+//     }
+// }
+//
+// fn no_overflags(board: &Board) -> bool {
+//     for point in board.size().points() {
+//         if let CellType::Safe(n) = board[point].cell_type && n > 0
+//                 && board.size()
+//                 .neighbours(point)
+//                 .map(|neighbour| if board[neighbour].cell_state == CellState::Flagged { 1 } else { 0 })
+//                 .sum::<u8>() > n {
+//             return false
+//         }
+//     }
+//     for point in board.size().points() {
+//         if let CellType::Safe(n) = board[point].cell_type && n > 0
+//                 && board.size()
+//                 .neighbours(point)
+//                 .map(|neighbour| if matches!(board[neighbour].cell_state, CellState::Flagged | CellState::Unknown) { 1 } else { 0 })
+//                 .sum::<u8>() < n {
+//             return false
+//         }
+//     }
+//     true
+// }
 
 fn is_solved(board: &Board) -> bool {
     for point in board.size().points() {
