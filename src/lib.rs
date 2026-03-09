@@ -75,6 +75,7 @@ pub trait GameStateTrait: Clone + Debug {
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GameState {
     pub status: GameStatus,
     pub board: Board,
@@ -143,6 +144,7 @@ pub enum CellState {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum GameStatus {
     Playing, Won, Lost, Never
 }
