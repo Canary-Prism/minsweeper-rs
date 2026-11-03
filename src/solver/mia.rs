@@ -1,683 +1,683 @@
-use crate::board::{Board, BoardSize, Point};
-use crate::solver::Operation::{Chord, Flag, Reveal};
-use crate::solver::{Action, Actionable, GameResult, Logic, Move, Reason, Solver};
-use crate::{CellState, CellType, GameState, GameStatus, Minsweeper};
-use std::cmp::Ordering;
-use std::collections::HashSet;
-use std::fmt::{Display, Formatter};
-use std::hash::{Hash, Hasher};
-use std::ops::Sub;
-use enumset::{EnumSet, EnumSetType};
-
-#[derive(Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub enum Level {
-    Beginner,
-    Intermediate,
-    Expert
-}
-
-impl Level {
-    fn logics(self) -> EnumSet<MiaLogic> {
-        match self {
-            Level::Beginner => MiaLogic::Chord | MiaLogic::FlagChord,
-            Level::Intermediate => MiaLogic::RegionDeductionReveal | MiaLogic::RegionDeductionFlag
+										use crate::board::{Board, BoardSize, Point};
+										use crate::solver::Operation::{Chord, Flag, Reveal};
+										use crate::solver::{Action, Actionable, GameResult, Logic, Move, Reason, Solver};
+										use crate::{CellState, CellType, GameState, GameStatus, Minsweeper};
+										use std::cmp::Ordering;
+										use std::collections::HashSet;
+										use std::fmt::{Display, Formatter};
+										use std::hash::{Hash, Hasher};
+										use std::ops::Sub;
+										use enumset::{EnumSet, EnumSetType};
+										
+										#[derive(Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Hash)]
+										pub enum Level {
+                                    Beginner,
+                                    Intermediate,
+                                    Expert
+										}
+										
+										impl Level {
+                                    fn logics(self) -> EnumSet<MiaLogic> {
+                                match self {
+                            Level::Beginner => MiaLogic::Chord | MiaLogic::FlagChord,
+                            Level::Intermediate => MiaLogic::RegionDeductionReveal | MiaLogic::RegionDeductionFlag
                     | MiaLogic::ZeroMinesRemaining,
-            Level::Expert => MiaLogic::BruteForce | MiaLogic::BruteForceExhaustion,
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct MiaSolver {
-    skill_level: Level,
-    required_level: Option<Level>,
-}
-
-impl MiaSolver {
-    const BRUTE_FORCE_LIMIT: usize = 30;
-
-    pub const fn skill(level: Level) -> Self {
-        Self {
-            skill_level: level,
-            required_level: None,
-        }
-    }
-
-    pub const fn only(level: Level) -> Self {
-        Self {
-            skill_level: level,
-            required_level: Some(level),
-        }
-    }
-}
-
-impl Default for MiaSolver {
-    fn default() -> Self {
-        Self::skill(Level::Expert)
-    }
-}
-
-impl Display for MiaSolver {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl MiaSolver {
-    fn internal_solve(&self, state: &GameState) -> Option<(Move, MiaLogic)> {
-
-        let size = state.board.size();
-
-        if state.status != GameStatus::Playing { return None };
-
-        for point in size.points() {
-            let CellType::Safe(number) = state.board[point].cell_type else { continue };
-
-            let mut marked_mines = HashSet::new();
-            let mut empty_spaces = HashSet::new();
-
-            for point in size.neighbours(point) {
-                match state.board[point].cell_state {
+                            Level::Expert => MiaLogic::BruteForce | MiaLogic::BruteForceExhaustion,
+                                }
+                                    }
+										}
+										
+										#[derive(Copy, Clone, Debug)]
+										pub struct MiaSolver {
+                                    skill_level: Level,
+                                    required_level: Option<Level>,
+										}
+										
+										impl MiaSolver {
+                                    const BRUTE_FORCE_LIMIT: usize = 30;
+										
+                                    pub const fn skill(level: Level) -> Self {
+                                Self {
+                            skill_level: level,
+                            required_level: None,
+                                }
+                                    }
+										
+                                    pub const fn only(level: Level) -> Self {
+                                Self {
+                            skill_level: level,
+                            required_level: Some(level),
+                                }
+                                    }
+										}
+										
+										impl Default for MiaSolver {
+                                    fn default() -> Self {
+                                Self::skill(Level::Expert)
+                                    }
+										}
+										
+										impl Display for MiaSolver {
+                                    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+                                write!(f, "{:?}", self)
+                                    }
+										}
+										
+										impl MiaSolver {
+                                    fn internal_solve(&self, state: &GameState) -> Option<(Move, MiaLogic)> {
+										
+                                let size = state.board.size();
+										
+                                if state.status != GameStatus::Playing { return None };
+										
+                                for point in size.points() {
+                            let CellType::Safe(number) = state.board[point].cell_type else { continue };
+										
+                            let mut marked_mines = HashSet::new();
+                            let mut empty_spaces = HashSet::new();
+										
+                            for point in size.neighbours(point) {
+                        match state.board[point].cell_state {
                     CellState::Flagged => {
-                        marked_mines.insert(point);
-                        empty_spaces.insert(point);
+                marked_mines.insert(point);
+                empty_spaces.insert(point);
                     }
                     CellState::Unknown => {
-                        empty_spaces.insert(point);
+                empty_spaces.insert(point);
                     }
                     _ => {}
-                }
-            }
-
-            if number as usize == marked_mines.len() && empty_spaces.len() > marked_mines.len() {
-                return Some((Move::single(Action::new(point, Chord), Some(Reason::new(MiaLogic::Chord, marked_mines))), MiaLogic::Chord))
-            } else if number as usize == empty_spaces.len() {
-                let clicks: HashSet<_> = size.neighbours(point)
-                        .filter(|e| state.board[*e].cell_state == CellState::Unknown)
-                        .map(|e| Action::new(e, Flag))
-                        .collect();
-
-                if !clicks.is_empty() {
+                        }
+                            }
+										
+                            if number as usize == marked_mines.len() && empty_spaces.len() > marked_mines.len() {
+                        return Some((Move::single(Action::new(point, Chord), Some(Reason::new(MiaLogic::Chord, marked_mines))), MiaLogic::Chord))
+                            } else if number as usize == empty_spaces.len() {
+                        let clicks: HashSet<_> = size.neighbours(point)
+                .filter(|e| state.board[*e].cell_state == CellState::Unknown)
+                .map(|e| Action::new(e, Flag))
+                .collect();
+										
+                        if !clicks.is_empty() {
                     return Some((Move::multi(clicks, Some(Reason::new(MiaLogic::FlagChord, empty_spaces))), MiaLogic::FlagChord));
-                }
-            } else if (number as usize) < marked_mines.len() {
-                let clicks: HashSet<_> = size.neighbours(point)
-                        .filter(|e| state.board[*e].cell_state == CellState::Flagged)
-                        .map(|e| Action::new(e, Flag))
-                        .collect();
-
-                return Some((Move::multi(clicks, Some(Reason::new(MiaLogic::FlagChord, empty_spaces))), MiaLogic::FlagChord));
-            }
-        }
-
-        if self.skill_level < Level::Intermediate {
-            return None
-        }
-
-        // hehe logical deduction
-        // i hope this isn't too hateful to implement in Rust
-
-        #[derive(Clone, Debug, Eq, PartialEq)]
-        struct Flag {
-            number: i8,
-            points: HashSet<Point>
-        }
-
-        impl Flag {
-            pub const fn new(number: i8, points: HashSet<Point>) -> Self {
-                Self { number, points }
-            }
-
-            pub fn contains(&self, other: &Self) -> bool {
-                self.number >= other.number
-                        && self.points.is_superset(&other.points)
-            }
-        }
-
-        impl PartialOrd for Flag {
-            fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-                if self == other {
+                        }
+                            } else if (number as usize) < marked_mines.len() {
+                        let clicks: HashSet<_> = size.neighbours(point)
+                .filter(|e| state.board[*e].cell_state == CellState::Flagged)
+                .map(|e| Action::new(e, Flag))
+                .collect();
+										
+                        return Some((Move::multi(clicks, Some(Reason::new(MiaLogic::FlagChord, empty_spaces))), MiaLogic::FlagChord));
+                            }
+                                }
+										
+                                if self.skill_level < Level::Intermediate {
+                            return None
+                                }
+										
+                                // hehe logical deduction
+                                // i hope this isn't too hateful to implement in Rust
+										
+                                #[derive(Clone, Debug, Eq, PartialEq)]
+                                struct Flag {
+                            number: i8,
+                            points: HashSet<Point>
+                                }
+										
+                                impl Flag {
+                            pub const fn new(number: i8, points: HashSet<Point>) -> Self {
+                        Self { number, points }
+                            }
+										
+                            pub fn contains(&self, other: &Self) -> bool {
+                        self.number >= other.number
+                && self.points.is_superset(&other.points)
+                            }
+                                }
+										
+                                impl PartialOrd for Flag {
+                            fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+                        if self == other {
                     return Some(Ordering::Equal)
-                }
-
-                if self.contains(other) {
+                        }
+										
+                        if self.contains(other) {
                     return Some(Ordering::Greater)
-                }
-
-                if other.contains(self) {
+                        }
+										
+                        if other.contains(self) {
                     return Some(Ordering::Less)
-                }
-
-                None
-            }
-        }
-
-        impl Sub for &Flag {
-            type Output = Flag;
-
-            fn sub(self, rhs: Self) -> Self::Output {
-                // if !(self >= rhs) {
-                //     panic!("mewo");
-                // }
-
-                let mut points = self.points.clone();
-
-                for point in &rhs.points {
+                        }
+										
+                        None
+                            }
+                                }
+										
+                                impl Sub for &Flag {
+                            type Output = Flag;
+										
+                            fn sub(self, rhs: Self) -> Self::Output {
+                        // if !(self >= rhs) {
+                        //     panic!("mewo");
+                        // }
+										
+                        let mut points = self.points.clone();
+										
+                        for point in &rhs.points {
                     points.remove(point);
-                }
-
-                Flag::new(self.number - rhs.number, points)
-            }
-        }
-
-        impl Hash for Flag {
-            fn hash<H: Hasher>(&self, state: &mut H) {
-                self.number.hash(state);
-                for point in &self.points {
+                        }
+										
+                        Flag::new(self.number - rhs.number, points)
+                            }
+                                }
+										
+                                impl Hash for Flag {
+                            fn hash<H: Hasher>(&self, state: &mut H) {
+                        self.number.hash(state);
+                        for point in &self.points {
                     point.hash(state)
-                }
-            }
-        }
-
-        #[cfg(feature = "linked-hash-set")]
-        let mut flags = hashlink::LinkedHashSet::new();
-        #[cfg(not(feature = "linked-hash-set"))]
-        let mut flags = HashSet::new();
-
-        for point in size.points() {
-            let CellType::Safe(mut required) = state.board[point].cell_type else {
-                continue
-            };
-
-            for point in size.neighbours(point) {
-                if state.board[point].cell_state == CellState::Flagged {
+                        }
+                            }
+                                }
+										
+                                #[cfg(feature = "linked-hash-set")]
+                                let mut flags = hashlink::LinkedHashSet::new();
+                                #[cfg(not(feature = "linked-hash-set"))]
+                                let mut flags = HashSet::new();
+										
+                                for point in size.points() {
+                            let CellType::Safe(mut required) = state.board[point].cell_type else {
+                        continue
+                            };
+										
+                            for point in size.neighbours(point) {
+                        if state.board[point].cell_state == CellState::Flagged {
                     required = required.saturating_sub(1)
-                }
-            }
-
-            if required == 0 {
-                continue
-            }
-
-            let neighbours: HashSet<_> = size.neighbours(point)
+                        }
+                            }
+										
+                            if required == 0 {
+                        continue
+                            }
+										
+                            let neighbours: HashSet<_> = size.neighbours(point)
                     .filter(|e| state.board[*e].cell_state == CellState::Unknown)
                     .collect();
-
-            if neighbours.is_empty() {
-                continue
-            }
-
-            flags.insert(Flag::new(required as i8, neighbours));
-        }
-
-        let mut changed = true;
-        while changed {
-
-            let mut to_add = HashSet::new();
-            for flag in &flags {
-                // entirely contained stuffs
-                {
+										
+                            if neighbours.is_empty() {
+                        continue
+                            }
+										
+                            flags.insert(Flag::new(required as i8, neighbours));
+                                }
+										
+                                let mut changed = true;
+                                while changed {
+										
+                            let mut to_add = HashSet::new();
+                            for flag in &flags {
+                        // entirely contained stuffs
+                        {
                     let contained_flags: Vec<_> = flags.iter()
-                            .filter(|e| flag >= e)
-                            .collect();
-
+            .filter(|e| flag >= e)
+            .collect();
+										
                     for contained in contained_flags {
-                        let remaining = flag - contained;
-
-                        if remaining.points.is_empty() {
-                            continue
-                        }
-
-                        if remaining.number == 0 {
-                            return Some((Move::multi(
-                                remaining.points
-                                        .into_iter()
-                                        .map(|e| Action::new(e, Reveal))
-                                        .collect(),
-                                Some(Reason::new(MiaLogic::RegionDeductionReveal, contained.points.clone()))
-                            ), MiaLogic::RegionDeductionReveal))
-                        } else if remaining.number > 0 && remaining.number as usize == remaining.points.len() {
-                            return Some((Move::multi(
-                                remaining.points
-                                        .into_iter()
-                                        .map(|e| Action::new(e, Flag))
-                                        .collect(),
-                                Some(Reason::new(MiaLogic::RegionDeductionFlag, contained.points.clone()))
-                            ), MiaLogic::RegionDeductionFlag))
-
-                        }
-
-                        to_add.insert(remaining);
-                    }
+                let remaining = flag - contained;
+										
+                if remaining.points.is_empty() {
+            continue
                 }
-
-                // not entirely contained stuffs
-                {
+										
+                if remaining.number == 0 {
+            return Some((Move::multi(
+        remaining.points
+.into_iter()
+.map(|e| Action::new(e, Reveal))
+.collect(),
+        Some(Reason::new(MiaLogic::RegionDeductionReveal, contained.points.clone()))
+            ), MiaLogic::RegionDeductionReveal))
+                } else if remaining.number > 0 && remaining.number as usize == remaining.points.len() {
+            return Some((Move::multi(
+        remaining.points
+.into_iter()
+.map(|e| Action::new(e, Flag))
+.collect(),
+        Some(Reason::new(MiaLogic::RegionDeductionFlag, contained.points.clone()))
+            ), MiaLogic::RegionDeductionFlag))
+										
+                }
+										
+                to_add.insert(remaining);
+                    }
+                        }
+										
+                        // not entirely contained stuffs
+                        {
                     let touching_flags = flags.iter()
-                            .filter(|e| e.points.iter()
-                                    .any(|e| flag.points.contains(e)));
-
+            .filter(|e| e.points.iter()
+    .any(|e| flag.points.contains(e)));
+										
                     for touching in touching_flags {
-                        let remaining = flag - touching;
-
-                        if remaining.points.is_empty() {
-                            continue
-                        }
-
-                        if remaining.number > 0 && remaining.number as usize == remaining.points.len() {
-                            return Some((Move::multi(
-                                remaining.points
-                                        .into_iter()
-                                        .map(|e| Action::new(e, Flag))
-                                        .collect(),
-                                Some(Reason::new(MiaLogic::RegionDeductionFlag, touching.points.clone()))
-                            ), MiaLogic::RegionDeductionFlag))
-                        }
-                    }
+                let remaining = flag - touching;
+										
+                if remaining.points.is_empty() {
+            continue
                 }
-            }
-
-            changed = to_add.into_iter()
+										
+                if remaining.number > 0 && remaining.number as usize == remaining.points.len() {
+            return Some((Move::multi(
+        remaining.points
+.into_iter()
+.map(|e| Action::new(e, Flag))
+.collect(),
+        Some(Reason::new(MiaLogic::RegionDeductionFlag, touching.points.clone()))
+            ), MiaLogic::RegionDeductionFlag))
+                }
+                    }
+                        }
+                            }
+										
+                            changed = to_add.into_iter()
                     .map(|e| flags.insert(e))
                     .reduce(|a, b| a || b)
                     .unwrap_or(false);
-        }
-
-        if state.remaining_mines == 0 {
-            let clicks: HashSet<_> = size.points()
+                                }
+										
+                                if state.remaining_mines == 0 {
+                            let clicks: HashSet<_> = size.points()
                     .filter(|e| state.board[*e].cell_state == CellState::Unknown)
                     .map(|e| Action::new(e, Reveal))
                     .collect();
-
-            if !clicks.is_empty() {
-                return Some((Move::multi(clicks, Some(Reason::new(MiaLogic::ZeroMinesRemaining, HashSet::new()))), MiaLogic::ZeroMinesRemaining))
-            }
-        }
-
-        if self.skill_level < Level::Expert {
-            return None
-        }
-
-        let mut empties = HashSet::new();
-        let mut adjacents = HashSet::new();
-
-        for point in size.points() {
-            if state.board[point].cell_state == CellState::Unknown {
-                for neighbour in size.neighbours(point) {
+										
+                            if !clicks.is_empty() {
+                        return Some((Move::multi(clicks, Some(Reason::new(MiaLogic::ZeroMinesRemaining, HashSet::new()))), MiaLogic::ZeroMinesRemaining))
+                            }
+                                }
+										
+                                if self.skill_level < Level::Expert {
+                            return None
+                                }
+										
+                                let mut empties = HashSet::new();
+                                let mut adjacents = HashSet::new();
+										
+                                for point in size.points() {
+                            if state.board[point].cell_state == CellState::Unknown {
+                        for neighbour in size.neighbours(point) {
                     if matches!(state.board[neighbour].cell_type, CellType::Safe(number) if number > 0) {
-                        empties.insert(point);
-                        adjacents.insert(neighbour);
+                empties.insert(point);
+                adjacents.insert(neighbour);
                     }
-                }
-            }
-        }
-
-        if empties.len() < Self::BRUTE_FORCE_LIMIT && !adjacents.is_empty() {
-            // let states: Vec<GameState> = brute_force(&adjacents.into_iter().collect(), 0, state)
-            //         .collect();
-
-            let mut result = BruteForceResult::new(size);
-
-            brute_force_3(&empties, &adjacents.iter().copied().collect(), 0, &mut state.clone(), &mut result);
-            // brute_force_2(&empties.iter().copied().collect(), 0, &mut state.clone(), &mut result);
-
-            if result.solve {
-                let mut clicks = HashSet::new();
-
-                for point in empties.iter().copied() {
+                        }
+                            }
+                                }
+										
+                                if empties.len() < Self::BRUTE_FORCE_LIMIT && !adjacents.is_empty() {
+                            // let states: Vec<GameState> = brute_force(&adjacents.into_iter().collect(), 0, state)
+                            //         .collect();
+										
+                            let mut result = BruteForceResult::new(size);
+										
+                            brute_force_3(&empties, &adjacents.iter().copied().collect(), 0, &mut state.clone(), &mut result);
+                            // brute_force_2(&empties.iter().copied().collect(), 0, &mut state.clone(), &mut result);
+										
+                            if result.solve {
+                        let mut clicks = HashSet::new();
+										
+                        for point in empties.iter().copied() {
                     if result.never_flag.contains(&point) {
-                        clicks.insert(Action::new(point, Reveal));
+                clicks.insert(Action::new(point, Reveal));
                     }
                     if result.always_flag.contains(&point) {
-                        clicks.insert(Action::new(point, Flag));
+                clicks.insert(Action::new(point, Flag));
                     }
-                }
-
-                if !clicks.is_empty() {
-                    return Some((Move::multi(clicks, Some(Reason::new(MiaLogic::BruteForce, empties))), MiaLogic::BruteForce))
-                }
-
-                if result.exhaustion {
-                    for point in size.points() {
-                        if state.board[point].cell_state == CellState::Unknown
-                                && result.never_flag.contains(&point) {
-                            clicks.insert(Action::new(point, Reveal));
                         }
+										
+                        if !clicks.is_empty() {
+                    return Some((Move::multi(clicks, Some(Reason::new(MiaLogic::BruteForce, empties))), MiaLogic::BruteForce))
+                        }
+										
+                        if result.exhaustion {
+                    for point in size.points() {
+                if state.board[point].cell_state == CellState::Unknown
+        && result.never_flag.contains(&point) {
+            clicks.insert(Action::new(point, Reveal));
+                }
                     }
-                }
-
-                if !clicks.is_empty() {
+                        }
+										
+                        if !clicks.is_empty() {
                     return Some((Move::multi(clicks, Some(Reason::new(MiaLogic::BruteForceExhaustion, empties))), MiaLogic::BruteForceExhaustion))
-                }
-
-            }
-
-        }
-
-        None
-    }
-}
-
-impl Solver for MiaSolver {
-
-    fn solve(&self, state: &GameState) -> Option<Move> {
-        self.internal_solve(state)
-                .map(|(e, _)| e)
-    }
-
-    fn solve_game(&self, minsweeper: &mut dyn Minsweeper) -> GameResult {
-        let mut requirement_met = self.required_level.is_none();
-        let required_logic = self.required_level
-                .map(Level::logics)
-                .unwrap_or_default();
-        let mut state = minsweeper.gamestate();
-
-        while state.status == GameStatus::Playing {
-            let Some((Move { actions, ..}, logic)) = self.internal_solve(state) else { break };
-
-            if !requirement_met && required_logic.contains(logic) {
-                requirement_met = true;
-            }
-
-            for action in actions {
-                state = minsweeper.action(action).into()
-            }
-        }
-
-        match state.status {
-            GameStatus::Won if requirement_met => GameResult::Won,
-            GameStatus::Lost => GameResult::Lost,
-            GameStatus::Playing => GameResult::Resigned,
-            _ => GameResult::Resigned
-        }
-
-    }
-}
-
-struct BruteForceResult {
-    solve: bool,
-    always_flag: HashSet<Point>,
-    never_flag: HashSet<Point>,
-    exhaustion: bool
-}
-
-impl BruteForceResult {
-    pub fn new(board_size: BoardSize) -> Self {
-        Self { solve: false, always_flag: board_size.points().collect(), never_flag: board_size.points().collect(), exhaustion: true }
-    }
-}
-
-fn brute_force_3(empties: &HashSet<Point>, adjacents: &Vec<Point>, adjacent_index: usize, state: &mut GameState, result: &mut BruteForceResult) {
-    if is_solved(&state.board) {
-        if state.remaining_mines != 0 {
-            result.exhaustion = false;
-        }
-
-        for point in empties {
-            if state.board[*point].cell_state == CellState::Flagged {
-                result.never_flag.remove(point);
-            } else {
-                result.always_flag.remove(point);
-            }
-        }
-
-        result.solve = true;
-        return
-    }
-    if state.remaining_mines == 0 {
-        return
-    }
-    if adjacent_index >= adjacents.len() {
-        return
-    }
-
-    let adjacent = adjacents[adjacent_index];
-    let CellType::Safe(n) = state.board[adjacent].cell_type else { unreachable!() };
-    let flagged = state.board.size()
-            .neighbours(adjacent)
-            .filter(|point| state.board[*point].cell_state == CellState::Flagged)
-            .count();
-    if n < flagged as u8 {
-        return
-    }
-    let flaggable = state.board.size()
-            .neighbours(adjacent)
-            .filter(|point| state.board[*point].cell_state == CellState::Unknown)
-            .collect();
-    recurse_flag(empties, adjacents, adjacent_index, &flaggable, 0, n as usize - flagged, state, result);
-}
-
-fn recurse_flag(empties: &HashSet<Point>, adjacents: &Vec<Point>, adjacent_index: usize, flaggable: &Vec<Point>, start: usize, mines_to_flag: usize, state: &mut GameState, result: &mut BruteForceResult) {
-
-    if mines_to_flag == 0 {
-        for point in &flaggable[start..] {
-            simulate_reveal(state, *point);
-        }
-        brute_force_3(empties, adjacents, adjacent_index + 1, state, result);
-        for point in &flaggable[start..] {
-            simulate_unreveal(state, *point);
-        }
-        return
-    }
-    for i in start..flaggable.len() {
-
-        simulate_right_click(state, flaggable[i]);
-        recurse_flag(empties, adjacents, adjacent_index, flaggable, i + 1, mines_to_flag - 1, state, result);
-        simulate_right_click(state, flaggable[i]);
-        simulate_reveal(state, flaggable[i])
-    }
-    for point in &flaggable[start..] {
-        simulate_unreveal(state, *point);
-    }
-}
-
-// fn brute_force_2(empties: &Vec<Point>, start: usize, state: &mut GameState, result: &mut BruteForceResult) {
-//     if is_solved(&state.board) {
-//         if state.remaining_mines != 0 {
-//             result.exhaustion = false;
-//         }
-//
-//         for point in empties {
-//             if state.board[*point].cell_state == CellState::Flagged {
-//                 result.never_flag.remove(point);
-//             } else {
-//                 result.always_flag.remove(point);
-//             }
-//         }
-//
-//         result.solve = true;
-//         return
-//     }
-//     if state.remaining_mines == 0 {
-//         return
-//     }
-//     for i in start..empties.len() {
-//         simulate_right_click(state, empties[i]);
-//         if no_overflags(&state.board) {
-//             brute_force_2(empties, i + 1, state, result);
-//         }
-//         simulate_right_click(state, empties[i]);
-//         simulate_reveal(state, empties[i]);
-//
-//     }
-//     for point in empties {
-//         simulate_unreveal(state, *point)
-//     }
-// }
-//
-// fn no_overflags(board: &Board) -> bool {
-//     for point in board.size().points() {
-//         if let CellType::Safe(n) = board[point].cell_type && n > 0
-//                 && board.size()
-//                 .neighbours(point)
-//                 .map(|neighbour| if board[neighbour].cell_state == CellState::Flagged { 1 } else { 0 })
-//                 .sum::<u8>() > n {
-//             return false
-//         }
-//     }
-//     for point in board.size().points() {
-//         if let CellType::Safe(n) = board[point].cell_type && n > 0
-//                 && board.size()
-//                 .neighbours(point)
-//                 .map(|neighbour| if matches!(board[neighbour].cell_state, CellState::Flagged | CellState::Unknown) { 1 } else { 0 })
-//                 .sum::<u8>() < n {
-//             return false
-//         }
-//     }
-//     true
-// }
-
-fn is_solved(board: &Board) -> bool {
-    for point in board.size().points() {
-        if let CellType::Safe(n) = board[point].cell_type && n > 0
-                && board.size()
-                .neighbours(point)
-                .map(|neighbour| if board[neighbour].cell_state == CellState::Flagged { 1 } else { 0 })
-                .sum::<u8>() != n {
-            return false
-        }
-    }
-    true
-}
-
-// fn brute_force(points: &Vec<Point>, index: usize, state: &GameState) -> Box<dyn Iterator<Item = GameState>> {
-//     let size = state.board.size();
-//     let mut empties = vec![];
-//     let current = points[index];
-//
-//     let mut flags = 0;
-//
-//     let CellType::Safe(number) = state.board[current].cell_type else {
-//         unreachable!()
-//     };
-//
-//     for point in size.neighbours(current) {
-//         match state.board[point].cell_state {
-//             CellState::Unknown => empties.push(point),
-//             CellState::Flagged => flags += 1,
-//             _ => {}
-//         }
-//     }
-//
-//     let mines_to_flag = number as isize - flags;
-//
-//     if mines_to_flag > state.remaining_mines || mines_to_flag as usize > empties.len() {
-//         return Box::new(std::iter::empty())
-//     }
-//
-//     if mines_to_flag == 0 || empties.is_empty() {
-//         if index + 1 == points.len() {
-//             return Box::new(std::iter::once(state.clone()));
-//         }
-//         return brute_force(points, index + 1, state);
-//     };
-//
-//     let mut stream: Vec<Box<dyn Iterator<Item = GameState>>> = vec![];
-//
-//     for flag_combinations in get_flag_combinations(&empties, mines_to_flag) {
-//         let mut state_copy = state.clone();
-//
-//         for point in &empties {
-//             if flag_combinations.contains(point) {
-//                 simulate_right_click(&mut state_copy, *point)
-//             } else {
-//                 simulate_reveal(&mut state_copy, *point)
-//             }
-//         }
-//
-//         if index + 1 == points.len() {
-//             stream.push(Box::new(std::iter::once(state_copy)))
-//         } else {
-//             stream.push(Box::new(brute_force(points, index + 1, &state_copy)))
-//         }
-//     }
-//
-//     Box::new(stream.into_iter()
-//             .flatten())
-// }
-//
-// fn get_flag_combinations(empties: &Vec<Point>, mines_to_flag: isize) -> Vec<HashSet<Point>> {
-//     if empties.len() < mines_to_flag as usize {
-//         return Vec::new()
-//     }
-//
-//     recursive_get_flag_combinations(HashSet::new(), empties, 0, mines_to_flag)
-//             .collect()
-// }
-//
-// fn recursive_get_flag_combinations(selected: HashSet<Point>, empties: &Vec<Point>, start: usize, mines_to_flag: isize) -> Box<dyn Iterator<Item = HashSet<Point>>> {
-//     if mines_to_flag < 1 {
-//         return Box::new(std::iter::empty())
-//     }
-//
-//     let mut stream: Vec<Box<dyn Iterator<Item = HashSet<Point>>>> = vec![];
-//
-//     for i in start..empties.len() {
-//         let mut selected = selected.clone();
-//         selected.insert(empties[i]);
-//         if mines_to_flag == 1 {
-//             stream.push(Box::new(std::iter::once(selected)))
-//         } else {
-//             stream.push(recursive_get_flag_combinations(selected, empties, start + 1, mines_to_flag - 1));
-//         }
-//     }
-//
-//     Box::new(stream.into_iter()
-//             .flatten())
-// }
-
-fn simulate_right_click(state: &mut GameState, point: Point) {
-    let cell = &mut state.board[point];
-    match cell.cell_state {
-        CellState::Unknown => {
-            cell.cell_state = CellState::Flagged;
-            state.remaining_mines -= 1;
-        }
-        CellState::Flagged => {
-            cell.cell_state = CellState::Unknown;
-            state.remaining_mines += 1;
-        }
-        CellState::Revealed => unreachable!()
-    }
-}
-
-fn simulate_reveal(state: &mut GameState, point: Point) {
-    // it is normally illegal to have a revealed cell still be unknown
-    // but such are the circumstances we find ourselves in
-    state.board[point].cell_state = CellState::Revealed;
-}
-fn simulate_unreveal(state: &mut GameState, point: Point) {
-    // it is normally illegal to have a revealed cell still be unknown
-    // but such are the circumstances we find ourselves in
-    state.board[point].cell_state = CellState::Unknown;
-}
-
-
-#[derive(EnumSetType, Debug)]
-pub enum MiaLogic {
-    Chord,
-    FlagChord,
-    RegionDeductionReveal,
-    RegionDeductionFlag,
-    ZeroMinesRemaining,
-    BruteForce,
-    BruteForceExhaustion,
-}
-
-impl Display for MiaLogic {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MiaLogic::Chord => write!(f, "the amount of flags around the cell matches its number"),
-            MiaLogic::FlagChord => write!(f, "the amount of flaggable cells around the cell matches its number"),
-            MiaLogic::RegionDeductionReveal => write!(f, "the surrounding cells force the cells to be safe"),
-            MiaLogic::RegionDeductionFlag => write!(f, "the surrounding cells force the cells to be a mine"),
-            MiaLogic::ZeroMinesRemaining => write!(f, "0 mines remaining, all unknown cells must be safe"),
-            MiaLogic::BruteForce => write!(f, "in every possible mine configuration the cells are safe/mines"),
-            MiaLogic::BruteForceExhaustion => write!(f, "in every possible mine configuration every mine is determined, all unused cells must be safe")
-        }
-    }
-}
-
-impl Logic for MiaLogic {
-
-}
+                        }
+										
+                            }
+										
+                                }
+										
+                                None
+                                    }
+										}
+										
+										impl Solver for MiaSolver {
+										
+                                    fn solve(&self, state: &GameState) -> Option<Move> {
+                                self.internal_solve(state)
+                        .map(|(e, _)| e)
+                                    }
+										
+                                    fn solve_game(&self, minsweeper: &mut dyn Minsweeper) -> GameResult {
+                                let mut requirement_met = self.required_level.is_none();
+                                let required_logic = self.required_level
+                        .map(Level::logics)
+                        .unwrap_or_default();
+                                let mut state = minsweeper.gamestate();
+										
+                                while state.status == GameStatus::Playing {
+                            let Some((Move { actions, ..}, logic)) = self.internal_solve(state) else { break };
+										
+                            if !requirement_met && required_logic.contains(logic) {
+                        requirement_met = true;
+                            }
+										
+                            for action in actions {
+                        state = minsweeper.action(action).into()
+                            }
+                                }
+										
+                                match state.status {
+                            GameStatus::Won if requirement_met => GameResult::Won,
+                            GameStatus::Lost => GameResult::Lost,
+                            GameStatus::Playing => GameResult::Resigned,
+                            _ => GameResult::Resigned
+                                }
+										
+                                    }
+										}
+										
+										struct BruteForceResult {
+                                    solve: bool,
+                                    always_flag: HashSet<Point>,
+                                    never_flag: HashSet<Point>,
+                                    exhaustion: bool
+										}
+										
+										impl BruteForceResult {
+                                    pub fn new(board_size: BoardSize) -> Self {
+                                Self { solve: false, always_flag: board_size.points().collect(), never_flag: board_size.points().collect(), exhaustion: true }
+                                    }
+										}
+										
+										fn brute_force_3(empties: &HashSet<Point>, adjacents: &Vec<Point>, adjacent_index: usize, state: &mut GameState, result: &mut BruteForceResult) {
+                                    if is_solved(&state.board) {
+                                if state.remaining_mines != 0 {
+                            result.exhaustion = false;
+                                }
+										
+                                for point in empties {
+                            if state.board[*point].cell_state == CellState::Flagged {
+                        result.never_flag.remove(point);
+                            } else {
+                        result.always_flag.remove(point);
+                            }
+                                }
+										
+                                result.solve = true;
+                                return
+                                    }
+                                    if state.remaining_mines == 0 {
+                                return
+                                    }
+                                    if adjacent_index >= adjacents.len() {
+                                return
+                                    }
+										
+                                    let adjacent = adjacents[adjacent_index];
+                                    let CellType::Safe(n) = state.board[adjacent].cell_type else { unreachable!() };
+                                    let flagged = state.board.size()
+                            .neighbours(adjacent)
+                            .filter(|point| state.board[*point].cell_state == CellState::Flagged)
+                            .count();
+                                    if n < flagged as u8 {
+                                return
+                                    }
+                                    let flaggable = state.board.size()
+                            .neighbours(adjacent)
+                            .filter(|point| state.board[*point].cell_state == CellState::Unknown)
+                            .collect();
+                                    recurse_flag(empties, adjacents, adjacent_index, &flaggable, 0, n as usize - flagged, state, result);
+										}
+										
+										fn recurse_flag(empties: &HashSet<Point>, adjacents: &Vec<Point>, adjacent_index: usize, flaggable: &Vec<Point>, start: usize, mines_to_flag: usize, state: &mut GameState, result: &mut BruteForceResult) {
+										
+                                    if mines_to_flag == 0 {
+                                for point in &flaggable[start..] {
+                            simulate_reveal(state, *point);
+                                }
+                                brute_force_3(empties, adjacents, adjacent_index + 1, state, result);
+                                for point in &flaggable[start..] {
+                            simulate_unreveal(state, *point);
+                                }
+                                return
+                                    }
+                                    for i in start..flaggable.len() {
+										
+                                simulate_right_click(state, flaggable[i]);
+                                recurse_flag(empties, adjacents, adjacent_index, flaggable, i + 1, mines_to_flag - 1, state, result);
+                                simulate_right_click(state, flaggable[i]);
+                                simulate_reveal(state, flaggable[i])
+                                    }
+                                    for point in &flaggable[start..] {
+                                simulate_unreveal(state, *point);
+                                    }
+										}
+										
+										// fn brute_force_2(empties: &Vec<Point>, start: usize, state: &mut GameState, result: &mut BruteForceResult) {
+										//     if is_solved(&state.board) {
+										//         if state.remaining_mines != 0 {
+										//             result.exhaustion = false;
+										//         }
+										//
+										//         for point in empties {
+										//             if state.board[*point].cell_state == CellState::Flagged {
+										//                 result.never_flag.remove(point);
+										//             } else {
+										//                 result.always_flag.remove(point);
+										//             }
+										//         }
+										//
+										//         result.solve = true;
+										//         return
+										//     }
+										//     if state.remaining_mines == 0 {
+										//         return
+										//     }
+										//     for i in start..empties.len() {
+										//         simulate_right_click(state, empties[i]);
+										//         if no_overflags(&state.board) {
+										//             brute_force_2(empties, i + 1, state, result);
+										//         }
+										//         simulate_right_click(state, empties[i]);
+										//         simulate_reveal(state, empties[i]);
+										//
+										//     }
+										//     for point in empties {
+										//         simulate_unreveal(state, *point)
+										//     }
+										// }
+										//
+										// fn no_overflags(board: &Board) -> bool {
+										//     for point in board.size().points() {
+										//         if let CellType::Safe(n) = board[point].cell_type && n > 0
+										//                 && board.size()
+										//                 .neighbours(point)
+										//                 .map(|neighbour| if board[neighbour].cell_state == CellState::Flagged { 1 } else { 0 })
+										//                 .sum::<u8>() > n {
+										//             return false
+										//         }
+										//     }
+										//     for point in board.size().points() {
+										//         if let CellType::Safe(n) = board[point].cell_type && n > 0
+										//                 && board.size()
+										//                 .neighbours(point)
+										//                 .map(|neighbour| if matches!(board[neighbour].cell_state, CellState::Flagged | CellState::Unknown) { 1 } else { 0 })
+										//                 .sum::<u8>() < n {
+										//             return false
+										//         }
+										//     }
+										//     true
+										// }
+										
+										fn is_solved(board: &Board) -> bool {
+                                    for point in board.size().points() {
+                                if let CellType::Safe(n) = board[point].cell_type && n > 0
+                        && board.size()
+                        .neighbours(point)
+                        .map(|neighbour| if board[neighbour].cell_state == CellState::Flagged { 1 } else { 0 })
+                        .sum::<u8>() != n {
+                            return false
+                                }
+                                    }
+                                    true
+										}
+										
+										// fn brute_force(points: &Vec<Point>, index: usize, state: &GameState) -> Box<dyn Iterator<Item = GameState>> {
+										//     let size = state.board.size();
+										//     let mut empties = vec![];
+										//     let current = points[index];
+										//
+										//     let mut flags = 0;
+										//
+										//     let CellType::Safe(number) = state.board[current].cell_type else {
+										//         unreachable!()
+										//     };
+										//
+										//     for point in size.neighbours(current) {
+										//         match state.board[point].cell_state {
+										//             CellState::Unknown => empties.push(point),
+										//             CellState::Flagged => flags += 1,
+										//             _ => {}
+										//         }
+										//     }
+										//
+										//     let mines_to_flag = number as isize - flags;
+										//
+										//     if mines_to_flag > state.remaining_mines || mines_to_flag as usize > empties.len() {
+										//         return Box::new(std::iter::empty())
+										//     }
+										//
+										//     if mines_to_flag == 0 || empties.is_empty() {
+										//         if index + 1 == points.len() {
+										//             return Box::new(std::iter::once(state.clone()));
+										//         }
+										//         return brute_force(points, index + 1, state);
+										//     };
+										//
+										//     let mut stream: Vec<Box<dyn Iterator<Item = GameState>>> = vec![];
+										//
+										//     for flag_combinations in get_flag_combinations(&empties, mines_to_flag) {
+										//         let mut state_copy = state.clone();
+										//
+										//         for point in &empties {
+										//             if flag_combinations.contains(point) {
+										//                 simulate_right_click(&mut state_copy, *point)
+										//             } else {
+										//                 simulate_reveal(&mut state_copy, *point)
+										//             }
+										//         }
+										//
+										//         if index + 1 == points.len() {
+										//             stream.push(Box::new(std::iter::once(state_copy)))
+										//         } else {
+										//             stream.push(Box::new(brute_force(points, index + 1, &state_copy)))
+										//         }
+										//     }
+										//
+										//     Box::new(stream.into_iter()
+										//             .flatten())
+										// }
+										//
+										// fn get_flag_combinations(empties: &Vec<Point>, mines_to_flag: isize) -> Vec<HashSet<Point>> {
+										//     if empties.len() < mines_to_flag as usize {
+										//         return Vec::new()
+										//     }
+										//
+										//     recursive_get_flag_combinations(HashSet::new(), empties, 0, mines_to_flag)
+										//             .collect()
+										// }
+										//
+										// fn recursive_get_flag_combinations(selected: HashSet<Point>, empties: &Vec<Point>, start: usize, mines_to_flag: isize) -> Box<dyn Iterator<Item = HashSet<Point>>> {
+										//     if mines_to_flag < 1 {
+										//         return Box::new(std::iter::empty())
+										//     }
+										//
+										//     let mut stream: Vec<Box<dyn Iterator<Item = HashSet<Point>>>> = vec![];
+										//
+										//     for i in start..empties.len() {
+										//         let mut selected = selected.clone();
+										//         selected.insert(empties[i]);
+										//         if mines_to_flag == 1 {
+										//             stream.push(Box::new(std::iter::once(selected)))
+										//         } else {
+										//             stream.push(recursive_get_flag_combinations(selected, empties, start + 1, mines_to_flag - 1));
+										//         }
+										//     }
+										//
+										//     Box::new(stream.into_iter()
+										//             .flatten())
+										// }
+										
+										fn simulate_right_click(state: &mut GameState, point: Point) {
+                                    let cell = &mut state.board[point];
+                                    match cell.cell_state {
+                                CellState::Unknown => {
+                            cell.cell_state = CellState::Flagged;
+                            state.remaining_mines -= 1;
+                                }
+                                CellState::Flagged => {
+                            cell.cell_state = CellState::Unknown;
+                            state.remaining_mines += 1;
+                                }
+                                CellState::Revealed => unreachable!()
+                                    }
+										}
+										
+										fn simulate_reveal(state: &mut GameState, point: Point) {
+                                    // it is normally illegal to have a revealed cell still be unknown
+                                    // but such are the circumstances we find ourselves in
+                                    state.board[point].cell_state = CellState::Revealed;
+										}
+										fn simulate_unreveal(state: &mut GameState, point: Point) {
+                                    // it is normally illegal to have a revealed cell still be unknown
+                                    // but such are the circumstances we find ourselves in
+                                    state.board[point].cell_state = CellState::Unknown;
+										}
+										
+										
+										#[derive(EnumSetType, Debug)]
+										pub enum MiaLogic {
+                                    Chord,
+                                    FlagChord,
+                                    RegionDeductionReveal,
+                                    RegionDeductionFlag,
+                                    ZeroMinesRemaining,
+                                    BruteForce,
+                                    BruteForceExhaustion,
+										}
+										
+										impl Display for MiaLogic {
+                                    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+                                match self {
+                            MiaLogic::Chord => write!(f, "the amount of flags around the cell matches its number"),
+                            MiaLogic::FlagChord => write!(f, "the amount of flaggable cells around the cell matches its number"),
+                            MiaLogic::RegionDeductionReveal => write!(f, "the surrounding cells force the cells to be safe"),
+                            MiaLogic::RegionDeductionFlag => write!(f, "the surrounding cells force the cells to be a mine"),
+                            MiaLogic::ZeroMinesRemaining => write!(f, "0 mines remaining, all unknown cells must be safe"),
+                            MiaLogic::BruteForce => write!(f, "in every possible mine configuration the cells are safe/mines"),
+                            MiaLogic::BruteForceExhaustion => write!(f, "in every possible mine configuration every mine is determined, all unused cells must be safe")
+                                }
+                                    }
+										}
+										
+										impl Logic for MiaLogic {
+										
+										}
