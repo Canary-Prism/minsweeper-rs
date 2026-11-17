@@ -1,4 +1,3 @@
-use crate::minsweeper::MinsweeperGame;
 use crate::solver::{GameResult, Logic, Move, Solver};
 use crate::{CellType, GameStatus, Minsweeper};
 use std::fmt::{Display, Formatter};

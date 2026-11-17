@@ -1,5 +1,4 @@
 use crate::board::{Board, Point};
-use minsweeper::MinsweeperGame;
 use std::fmt::{Debug, Display, Formatter};
 
 pub mod board;
@@ -111,7 +110,7 @@ mod tests {
     use crate::minsweeper::MinsweeperGame;
     use crate::solver::GameResult::Lost;
     use crate::solver::Solver;
-    use crate::solver::mia::{Level, MiaSolver};
+    use crate::solver::mia::MiaSolver;
     use crate::solver::start::SafeStart;
 
     #[test]

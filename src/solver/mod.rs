@@ -2,7 +2,6 @@ pub mod mia;
 pub mod start;
 
 use crate::board::Point;
-use crate::minsweeper::MinsweeperGame;
 use crate::{GameStatus, Minsweeper};
 use std::collections::HashSet;
 use std::fmt::{Debug, Display};
@@ -10,7 +9,6 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 pub trait Solver {
-
     fn solve(&self, game_state: &dyn Minsweeper) -> Option<Move>;
 
     fn solve_game(&self, minsweeper: &mut dyn Minsweeper) -> GameResult {
@@ -27,7 +25,6 @@ pub trait Solver {
             GameStatus::Won => GameResult::Won,
             GameStatus::Lost => GameResult::Lost,
             GameStatus::Playing => GameResult::Resigned,
-            _ => unreachable!()
         }
     }
 }
