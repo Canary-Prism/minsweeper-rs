@@ -1,29 +1,29 @@
 pub mod mia;
 pub mod start;
 
+use crate::board::Point;
+use crate::minsweeper::MinsweeperGame;
+use crate::{GameStatus, Minsweeper};
 use std::collections::HashSet;
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
 use std::sync::Arc;
-use crate::{GameState, GameStatus, Minsweeper};
-use crate::board::Point;
 
 pub trait Solver {
 
-    fn solve(&self, game_state: &GameState) -> Option<Move>;
+    fn solve(&self, game_state: &dyn Minsweeper) -> Option<Move>;
 
     fn solve_game(&self, minsweeper: &mut dyn Minsweeper) -> GameResult {
-        let mut state = minsweeper.gamestate();
 
-        while state.status == GameStatus::Playing {
-            let Some(Move { actions, ..}) = self.solve(state) else { break };
+        while minsweeper.status() == GameStatus::Playing {
+            let Some(Move { actions, ..}) = self.solve(minsweeper) else { break };
 
             for action in actions {
-                state = minsweeper.action(action).into()
+                minsweeper.action(action);
             }
         }
 
-        match state.status {
+        match minsweeper.status() {
             GameStatus::Won => GameResult::Won,
             GameStatus::Lost => GameResult::Lost,
             GameStatus::Playing => GameResult::Resigned,
@@ -33,7 +33,7 @@ pub trait Solver {
 }
 
 impl<S: Solver + ?Sized> Solver for Box<S> {
-    fn solve(&self, game_state: &GameState) -> Option<Move> {
+    fn solve(&self, game_state: &dyn Minsweeper) -> Option<Move> {
         (**self).solve(game_state)
     }
     fn solve_game(&self, minsweeper: &mut dyn Minsweeper) -> GameResult {
@@ -41,7 +41,7 @@ impl<S: Solver + ?Sized> Solver for Box<S> {
     }
 }
 impl<S: Solver + ?Sized> Solver for Arc<S> {
-    fn solve(&self, game_state: &GameState) -> Option<Move> {
+    fn solve(&self, game_state: &dyn Minsweeper) -> Option<Move> {
         (**self).solve(game_state)
     }
     fn solve_game(&self, minsweeper: &mut dyn Minsweeper) -> GameResult {
@@ -49,7 +49,7 @@ impl<S: Solver + ?Sized> Solver for Arc<S> {
     }
 }
 impl<S: Solver + ?Sized> Solver for Rc<S> {
-    fn solve(&self, game_state: &GameState) -> Option<Move> {
+    fn solve(&self, game_state: &dyn Minsweeper) -> Option<Move> {
         (**self).solve(game_state)
     }
     fn solve_game(&self, minsweeper: &mut dyn Minsweeper) -> GameResult {
@@ -57,7 +57,7 @@ impl<S: Solver + ?Sized> Solver for Rc<S> {
     }
 }
 impl Solver for &dyn Solver {
-    fn solve(&self, game_state: &GameState) -> Option<Move> {
+    fn solve(&self, game_state: &dyn Minsweeper) -> Option<Move> {
         (**self).solve(game_state)
     }
     fn solve_game(&self, minsweeper: &mut dyn Minsweeper) -> GameResult {
@@ -108,11 +108,11 @@ pub enum Operation {
 }
 
 pub trait Actionable {
-    fn action(&mut self, action: Action) -> Result<&GameState, &GameState>;
+    fn action(&mut self, action: Action);
 }
 
 impl<T: Minsweeper + ?Sized> Actionable for T {
-    fn action(&mut self, action: Action) -> Result<&GameState, &GameState> {
+    fn action(&mut self, action: Action) {
         match action.operation {
             Operation::Reveal => self.reveal(action.point),
             Operation::Chord => self.clear_around(action.point),

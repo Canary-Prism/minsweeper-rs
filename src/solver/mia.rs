@@ -1,13 +1,14 @@
 use crate::board::{Board, BoardSize, Point};
+use crate::minsweeper::MinsweeperGame;
 use crate::solver::Operation::{Chord, Flag, Reveal};
 use crate::solver::{Action, Actionable, GameResult, Logic, Move, Reason, Solver};
-use crate::{CellState, CellType, GameState, GameStatus, Minsweeper};
+use crate::{CellState, CellType, GameStatus, Minsweeper};
+use enumset::{EnumSet, EnumSetType};
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::Sub;
-use enumset::{EnumSet, EnumSetType};
 
 #[derive(Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum Level {
@@ -64,20 +65,23 @@ impl Display for MiaSolver {
 }
 
 impl MiaSolver {
-    fn internal_solve(&self, state: &GameState) -> Option<(Move, MiaLogic)> {
+    fn internal_solve(&self, minsweeper: &dyn Minsweeper) -> Option<(Move, MiaLogic)> {
 
-        let size = state.board.size();
+        let size = minsweeper.board().size();
 
-        if state.status != GameStatus::Playing { return None };
+        if minsweeper.status() != GameStatus::Playing { return None };
 
         for point in size.points() {
-            let CellType::Safe(number) = state.board[point].cell_type else { continue };
+            if minsweeper.board()[point].cell_state != CellState::Revealed {
+                continue
+            }
+            let CellType::Safe(number) = minsweeper.board()[point].cell_type else { continue };
 
             let mut marked_mines = HashSet::new();
             let mut empty_spaces = HashSet::new();
 
             for point in size.neighbours(point) {
-                match state.board[point].cell_state {
+                match minsweeper.board()[point].cell_state {
                     CellState::Flagged => {
                         marked_mines.insert(point);
                         empty_spaces.insert(point);
@@ -93,7 +97,7 @@ impl MiaSolver {
                 return Some((Move::single(Action::new(point, Chord), Some(Reason::new(MiaLogic::Chord, marked_mines))), MiaLogic::Chord))
             } else if number as usize == empty_spaces.len() {
                 let clicks: HashSet<_> = size.neighbours(point)
-                        .filter(|e| state.board[*e].cell_state == CellState::Unknown)
+                        .filter(|e| minsweeper.board()[*e].cell_state == CellState::Unknown)
                         .map(|e| Action::new(e, Flag))
                         .collect();
 
@@ -102,10 +106,9 @@ impl MiaSolver {
                 }
             } else if (number as usize) < marked_mines.len() {
                 let clicks: HashSet<_> = size.neighbours(point)
-                        .filter(|e| state.board[*e].cell_state == CellState::Flagged)
+                        .filter(|e| minsweeper.board()[*e].cell_state == CellState::Flagged)
                         .map(|e| Action::new(e, Flag))
                         .collect();
-
                 return Some((Move::multi(clicks, Some(Reason::new(MiaLogic::FlagChord, empty_spaces))), MiaLogic::FlagChord));
             }
         }
@@ -185,12 +188,15 @@ impl MiaSolver {
         let mut flags = HashSet::new();
 
         for point in size.points() {
-            let CellType::Safe(mut required) = state.board[point].cell_type else {
+            if minsweeper.board()[point].cell_state != CellState::Revealed {
+                continue
+            }
+            let CellType::Safe(mut required) = minsweeper.board()[point].cell_type else {
                 continue
             };
 
             for point in size.neighbours(point) {
-                if state.board[point].cell_state == CellState::Flagged {
+                if minsweeper.board()[point].cell_state == CellState::Flagged {
                     required = required.saturating_sub(1)
                 }
             }
@@ -200,7 +206,7 @@ impl MiaSolver {
             }
 
             let neighbours: HashSet<_> = size.neighbours(point)
-                    .filter(|e| state.board[*e].cell_state == CellState::Unknown)
+                    .filter(|e| minsweeper.board()[*e].cell_state == CellState::Unknown)
                     .collect();
 
             if neighbours.is_empty() {
@@ -283,9 +289,9 @@ impl MiaSolver {
                     .unwrap_or(false);
         }
 
-        if state.remaining_mines == 0 {
+        if minsweeper.remaining_mines() == 0 {
             let clicks: HashSet<_> = size.points()
-                    .filter(|e| state.board[*e].cell_state == CellState::Unknown)
+                    .filter(|e| minsweeper.board()[*e].cell_state == CellState::Unknown)
                     .map(|e| Action::new(e, Reveal))
                     .collect();
 
@@ -302,9 +308,12 @@ impl MiaSolver {
         let mut adjacents = HashSet::new();
 
         for point in size.points() {
-            if state.board[point].cell_state == CellState::Unknown {
+            if minsweeper.board()[point].cell_state == CellState::Unknown {
                 for neighbour in size.neighbours(point) {
-                    if matches!(state.board[neighbour].cell_type, CellType::Safe(number) if number > 0) {
+                    if minsweeper.board()[point].cell_state != CellState::Revealed {
+                        continue
+                    }
+                    if matches!(minsweeper.board()[neighbour].cell_type, CellType::Safe(number) if number > 0) {
                         empties.insert(point);
                         adjacents.insert(neighbour);
                     }
@@ -318,7 +327,9 @@ impl MiaSolver {
 
             let mut result = BruteForceResult::new(size);
 
-            brute_force_3(&empties, &adjacents.iter().copied().collect(), 0, &mut state.clone(), &mut result);
+            let board = minsweeper.board().clone();
+
+            brute_force_3(&empties, &adjacents.iter().copied().collect(), 0, &mut MinsweeperGame::new(minsweeper.status(), board, minsweeper.remaining_mines()), &mut result);
             // brute_force_2(&empties.iter().copied().collect(), 0, &mut state.clone(), &mut result);
 
             if result.solve {
@@ -339,7 +350,7 @@ impl MiaSolver {
 
                 if result.exhaustion {
                     for point in size.points() {
-                        if state.board[point].cell_state == CellState::Unknown
+                        if minsweeper.board()[point].cell_state == CellState::Unknown
                                 && result.never_flag.contains(&point) {
                             clicks.insert(Action::new(point, Reveal));
                         }
@@ -360,7 +371,7 @@ impl MiaSolver {
 
 impl Solver for MiaSolver {
 
-    fn solve(&self, state: &GameState) -> Option<Move> {
+    fn solve(&self, state: &dyn Minsweeper) -> Option<Move> {
         self.internal_solve(state)
                 .map(|(e, _)| e)
     }
@@ -370,21 +381,20 @@ impl Solver for MiaSolver {
         let required_logic = self.required_level
                 .map(Level::logics)
                 .unwrap_or_default();
-        let mut state = minsweeper.gamestate();
 
-        while state.status == GameStatus::Playing {
-            let Some((Move { actions, ..}, logic)) = self.internal_solve(state) else { break };
+        while minsweeper.status() == GameStatus::Playing {
+            let Some((Move { actions, ..}, logic)) = self.internal_solve(minsweeper) else { break };
 
             if !requirement_met && required_logic.contains(logic) {
                 requirement_met = true;
             }
 
             for action in actions {
-                state = minsweeper.action(action).into()
+                minsweeper.action(action);
             }
         }
 
-        match state.status {
+        match minsweeper.status() {
             GameStatus::Won if requirement_met => GameResult::Won,
             GameStatus::Lost => GameResult::Lost,
             GameStatus::Playing => GameResult::Resigned,
@@ -407,14 +417,14 @@ impl BruteForceResult {
     }
 }
 
-fn brute_force_3(empties: &HashSet<Point>, adjacents: &Vec<Point>, adjacent_index: usize, state: &mut GameState, result: &mut BruteForceResult) {
-    if is_solved(&state.board) {
-        if state.remaining_mines != 0 {
+fn brute_force_3(empties: &HashSet<Point>, adjacents: &Vec<Point>, adjacent_index: usize, state: &mut MinsweeperGame, result: &mut BruteForceResult) {
+    if is_solved(state.board()) {
+        if state.remaining_mines() != 0 {
             result.exhaustion = false;
         }
 
         for point in empties {
-            if state.board[*point].cell_state == CellState::Flagged {
+            if state.board()[*point].cell_state == CellState::Flagged {
                 result.never_flag.remove(point);
             } else {
                 result.always_flag.remove(point);
@@ -424,7 +434,7 @@ fn brute_force_3(empties: &HashSet<Point>, adjacents: &Vec<Point>, adjacent_inde
         result.solve = true;
         return
     }
-    if state.remaining_mines == 0 {
+    if state.remaining_mines() == 0 {
         return
     }
     if adjacent_index >= adjacents.len() {
@@ -432,42 +442,43 @@ fn brute_force_3(empties: &HashSet<Point>, adjacents: &Vec<Point>, adjacent_inde
     }
 
     let adjacent = adjacents[adjacent_index];
-    let CellType::Safe(n) = state.board[adjacent].cell_type else { unreachable!() };
-    let flagged = state.board.size()
+    // no need to check for is revealed, should already be from unreachable!()
+    let CellType::Safe(n) = state.board()[adjacent].cell_type else { unreachable!() };
+    let flagged = state.board().size()
             .neighbours(adjacent)
-            .filter(|point| state.board[*point].cell_state == CellState::Flagged)
+            .filter(|point| state.board()[*point].cell_state == CellState::Flagged)
             .count();
     if n < flagged as u8 {
         return
     }
-    let flaggable = state.board.size()
+    let flaggable = state.board().size()
             .neighbours(adjacent)
-            .filter(|point| state.board[*point].cell_state == CellState::Unknown)
+            .filter(|point| state.board()[*point].cell_state == CellState::Unknown)
             .collect();
     recurse_flag(empties, adjacents, adjacent_index, &flaggable, 0, n as usize - flagged, state, result);
 }
 
-fn recurse_flag(empties: &HashSet<Point>, adjacents: &Vec<Point>, adjacent_index: usize, flaggable: &Vec<Point>, start: usize, mines_to_flag: usize, state: &mut GameState, result: &mut BruteForceResult) {
+fn recurse_flag(empties: &HashSet<Point>, adjacents: &Vec<Point>, adjacent_index: usize, flaggable: &Vec<Point>, start: usize, mines_to_flag: usize, minsweeper: &mut MinsweeperGame, result: &mut BruteForceResult) {
 
     if mines_to_flag == 0 {
         for point in &flaggable[start..] {
-            simulate_reveal(state, *point);
+            simulate_reveal(minsweeper, *point);
         }
-        brute_force_3(empties, adjacents, adjacent_index + 1, state, result);
+        brute_force_3(empties, adjacents, adjacent_index + 1, minsweeper, result);
         for point in &flaggable[start..] {
-            simulate_unreveal(state, *point);
+            simulate_unreveal(minsweeper, *point);
         }
         return
     }
     for i in start..flaggable.len() {
 
-        simulate_right_click(state, flaggable[i]);
-        recurse_flag(empties, adjacents, adjacent_index, flaggable, i + 1, mines_to_flag - 1, state, result);
-        simulate_right_click(state, flaggable[i]);
-        simulate_reveal(state, flaggable[i])
+        simulate_right_click(minsweeper, flaggable[i]);
+        recurse_flag(empties, adjacents, adjacent_index, flaggable, i + 1, mines_to_flag - 1, minsweeper, result);
+        simulate_right_click(minsweeper, flaggable[i]);
+        simulate_reveal(minsweeper, flaggable[i])
     }
     for point in &flaggable[start..] {
-        simulate_unreveal(state, *point);
+        simulate_unreveal(minsweeper, *point);
     }
 }
 
@@ -529,6 +540,9 @@ fn recurse_flag(empties: &HashSet<Point>, adjacents: &Vec<Point>, adjacent_index
 
 fn is_solved(board: &Board) -> bool {
     for point in board.size().points() {
+        if board[point].cell_state != CellState::Revealed {
+            continue
+        }
         if let CellType::Safe(n) = board[point].cell_type && n > 0
                 && board.size()
                 .neighbours(point)
@@ -626,7 +640,7 @@ fn is_solved(board: &Board) -> bool {
 //             .flatten())
 // }
 
-fn simulate_right_click(state: &mut GameState, point: Point) {
+fn simulate_right_click(state: &mut MinsweeperGame, point: Point) {
     let cell = &mut state.board[point];
     match cell.cell_state {
         CellState::Unknown => {
@@ -641,12 +655,12 @@ fn simulate_right_click(state: &mut GameState, point: Point) {
     }
 }
 
-fn simulate_reveal(state: &mut GameState, point: Point) {
+fn simulate_reveal(state: &mut MinsweeperGame, point: Point) {
     // it is normally illegal to have a revealed cell still be unknown
     // but such are the circumstances we find ourselves in
     state.board[point].cell_state = CellState::Revealed;
 }
-fn simulate_unreveal(state: &mut GameState, point: Point) {
+fn simulate_unreveal(state: &mut MinsweeperGame, point: Point) {
     // it is normally illegal to have a revealed cell still be unknown
     // but such are the circumstances we find ourselves in
     state.board[point].cell_state = CellState::Unknown;
