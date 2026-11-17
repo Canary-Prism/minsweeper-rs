@@ -5,21 +5,59 @@ pub mod board;
 pub mod minsweeper;
 pub mod solver;
 
+/// Main trait for Minsweeper
+///
+/// all of the things you can do to a game of minesweeper idk what else you want me to say
+///
+/// the main implementation is [minsweeper::MinsweeperGame] so
 pub trait Minsweeper {
+
+    /// gets the status of this game
+    ///
+    /// the status is either [GameStatus::Playing], [GameStatus::Playing], or [GameStatus::Lost]
     fn status(&self) -> GameStatus;
+
+    /// gets the board of this game
     fn board(&self) -> &Board;
+
+    /// gets the remaining mines
+    ///
+    /// the remaining mines is calculated from
+    /// the total amount of mines in the game - the amount of flags
     fn remaining_mines(&self) -> isize;
 
+    /// reveals a cell on the board at the specified location
+    ///
+    /// this is essentially what left clicking on an [Unknown][CellState::Unknown] [Cell] conventionally does
     fn reveal(&mut self, point: Point);
 
+    /// reveals all non [Flagged][CellState::Flagged] neighbours of the cell at the specified location
+    /// assuming that location is a [Revealed][CellState::Revealed] [Cell] and its number
+    /// matches the amount of flags
+    ///
+    /// this is conventionally known as Chording
+    /// and is essentially what left clicking on a [Revealed][CellState::Revealed] [Cell] conventionally does
     fn clear_around(&mut self, point: Point);
 
+    /// flags or unflags a cell
+    ///
+    /// internally this changes the [Cell]'s [CellState] to be either
+    /// [CellState::Unknown] if `flagged` is false or [CellState::Flagged] if it's true
+    ///
+    /// does nothing if the cell's state is [CellState::Revealed]
     fn set_flagged(&mut self, point: Point, flagged: bool);
 
+    /// toggles the flagging of a cell
+    ///
+    /// similar to [Self::set_flagged] but toggles between the two states instead
+    ///
+    /// conventionally this is what right clicking does to a non [Revealed][CellState::Revealed] cell
     fn toggle_flag(&mut self, point: Point) {
         self.set_flagged(point, self.board()[point].cell_state != CellState::Flagged)
     }
 
+    /// convenience method for doing either [Self::reveal] or [Self::clear_around]
+    /// depending on the cell clicked on
     fn left_click(&mut self, point: Point) {
 
         if check_interact(self, point).is_err() {
@@ -35,12 +73,14 @@ pub trait Minsweeper {
         }
     }
 
+    /// convenience method for literally the same thing as [Self::toggle_flag]
     fn right_click(&mut self, point: Point) {
         self.toggle_flag(point)
     }
 
 }
 
+/// check whether a given point is even like valid to interact with
 fn check_interact(minsweeper: &(impl Minsweeper + ?Sized), point: Point) -> Result<(), ()> {
     let state = minsweeper;
     if state.status() == GameStatus::Playing
@@ -51,6 +91,8 @@ fn check_interact(minsweeper: &(impl Minsweeper + ?Sized), point: Point) -> Resu
         Err(())
     }
 }
+
+/// represents a single cell in a minesweeper game
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Cell {
@@ -59,6 +101,8 @@ pub struct Cell {
 }
 
 impl Cell {
+
+    /// an empty and unknown cell
     pub const EMPTY: Cell = Cell::new(CellType::EMPTY, CellState::Unknown);
 
     pub const fn new(cell_type: CellType, cell_state: CellState) -> Self {
@@ -82,15 +126,35 @@ impl Display for Cell {
     }
 }
 
+/// represents the type of cell
+///
+/// this is its actual data
+/// [CellType::Unknown] is currently unused
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum CellType {
-    Safe(u8), Mine, Unknown
+
+    /// a safe cell is any cell that is not a [Mine][CellType::Mine]
+    ///
+    /// contains a `u8` that represents the amount of mines in its neighbour,
+    /// ranges from 0 to 8 inclusive
+    Safe(u8),
+
+    /// a mine :3
+    ///
+    /// kaboom
+    Mine,
+
+    /// unused, should i get rid of it ,,?
+    Unknown
 }
 impl CellType {
     pub const EMPTY: CellType = CellType::Safe(0);
 }
 
+/// the state of a cell
+/// 
+/// like whether it's unknown or revealed or flagged you get it smh
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum CellState {
@@ -141,7 +205,7 @@ mod tests {
             let mut game = minsweeper::generate_solvable_game(ConventionalSize::Expert.size(), &SafeStart, (0, 0));
 
             game.reveal((0, 0));
-            
+
             let result = MiaSolver::default().solve_game(&mut game);
 
             if result == Lost {

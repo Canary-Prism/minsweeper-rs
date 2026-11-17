@@ -4,6 +4,8 @@ use crate::{Cell, CellState, CellType, GameStatus, Minsweeper, check_interact};
 use std::collections::HashSet;
 
 
+/// generates a random [MinsweeperGame] with no guarantees of any sort,
+/// the mine positioning is 100% random
 pub fn generate_game(board_size: BoardSize) -> MinsweeperGame {
     let mut board = Board::empty(board_size);
 
@@ -19,6 +21,7 @@ pub fn generate_game(board_size: BoardSize) -> MinsweeperGame {
     MinsweeperGame::new(GameStatus::Playing, board, usize::from(board_size.mines()).try_into().unwrap())
 }
 
+/// i refuse to fix the typo
 fn generate_nmbers(board: &mut Board) {
     let empty_unknown = Cell::new(CellType::EMPTY, CellState::Unknown);
     for point in board.size().points() {
@@ -39,6 +42,10 @@ fn generate_nmbers(board: &mut Board) {
     }
 }
 
+/// generate a random [MinsweeperGame] that is guaranteed to be solvable by the provided [Solver]
+/// assuming the first move in the game is to reveal at the provided `point`
+///
+/// **this does *not* actualy hand you a game that has had the first move performed on it**
 pub fn generate_solvable_game(board_size: BoardSize, solver: &dyn Solver, point: Point) -> MinsweeperGame {
     loop {
         let original_game = generate_game(board_size);
@@ -55,6 +62,9 @@ pub fn generate_solvable_game(board_size: BoardSize, solver: &dyn Solver, point:
     }
 }
 
+/// like [generate_solvable_game] but async
+///
+/// i don't like async
 pub async fn generate_solvable_game_async<S: Solver + Send + Sync>(board_size: BoardSize, solver: &S, point: Point) -> MinsweeperGame {
     loop {
         let Some(state) = try_generate_solvable_game_async(board_size, solver, point).await else {
@@ -80,6 +90,10 @@ async fn try_generate_solvable_game_async<S: Solver + Send + Sync>(board_size: B
     }
 }
 
+
+/// represents a game of minesweeper :3
+///
+/// this is the main implementation of [Minsweeper]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MinsweeperGame {
