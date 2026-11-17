@@ -140,6 +140,8 @@ mod tests {
         for _ in 0..100 {
             let mut game = minsweeper::generate_solvable_game(ConventionalSize::Expert.size(), &SafeStart, (0, 0));
 
+            game.reveal((0, 0));
+            
             let result = MiaSolver::default().solve_game(&mut game);
 
             if result == Lost {
